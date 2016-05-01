@@ -1,0 +1,2 @@
+bin/btrfscue /usr/bin/
+README.md /usr/share/doc/btrfscue/

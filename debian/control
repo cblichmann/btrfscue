@@ -1,0 +1,16 @@
+Source: btrfscue
+Maintainer: Christian Blichmann <mail@blichmann.eu>
+Section: admin
+Priority: optional
+Build-Depends: cdbs,golang,make
+Standards-Version: 3.9.6
+Homepage: https://github.com/cblichmann/jailtime
+
+Package: btrfscue
+Architecture: any
+Depends: ${shlibs:Depends},${misc:Depends}
+Description: Advanced data recovery tool for the BTRFS filesystem.
+ btrfscue is designed to restore data
+ - from disk images of faulty storage devices.
+ - even when all superblocks are missing/were overwritten.
+ - of recently deleted files.

@@ -1,0 +1,8 @@
+# Build artifacts
+bin/
+pkg/
+src/
+# Editor swap files
+.*.sw[op]
+# Test image
+*.img
