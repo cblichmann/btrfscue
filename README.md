@@ -20,6 +20,10 @@ Development State
 -----------------
 
 As the version number 0.3 implies, this software is pretty much in alpha state.
+In fact, the repository you're looking at now is a complete rewrite of an
+earlier attempt that was written in C++ as early as 2011 (so don't let the
+copyright years fool you :)).
+
 This works:
   - Heuristic detection of filesystem identifiers
   - Dump meta data to file
@@ -54,7 +58,7 @@ How to Build
 
 General way to build from source via `go get`:
 ```
-go get github.com/cblichmann/btrfscue/src/btrfscue
+go get blichmann.eu/code/btrfscue
 ```
 
 ### Build the old-fashioned Way

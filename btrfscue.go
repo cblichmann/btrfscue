@@ -15,18 +15,20 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL CHRISTIAN BLICHMANN BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 package main
 
 import (
+	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"flag"
 	"fmt"
@@ -34,23 +36,32 @@ import (
 )
 
 const (
-	VersionMajor = 0
-	VersionMinor = 3
+	versionMajor = 0
+	versionMinor = 3
 )
 
 var (
 	// Global options
+	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
+		"file system block size, usually the memory page"+
+			"size of the system that created it")
+	metadata = flag.String("metadata", "", "metadata database to use")
+
 	help    = flag.Bool("help", false, "display this help and exit")
 	verbose = flag.Bool("verbose", false, "explain what is being done")
 	version = flag.Bool("version", false, "display version and exit")
 
-	identifyCmd  = subcommand.Register("identify", &identifyCommand{})
-	reconCommand = subcommand.Register("recon", &reconCommand{})
-	recoverCmd   = subcommand.Register("recover", &recoverCommand{})
+	identifyCmd = subcommand.Register("identify", &identifyCommand{})
+	reconCmd    = subcommand.Register("recon", &reconCommand{})
+	recoverCmd  = subcommand.Register("recover", &recoverCommand{})
 )
 
-func fatalf(format string, v ...interface{}) {
+func warnf(format string, v ...interface{}) {
 	fmt.Fprintf(os.Stderr, "btrfscue: "+format, v...)
+}
+
+func fatalf(format string, v ...interface{}) {
+	warnf(format, v...)
 	os.Exit(1)
 }
 
@@ -78,7 +89,7 @@ func printUsage() {
 }
 
 func main() {
-	flag.Usage = func() {}
+	flag.Usage = func() { /* Disable */ }
 	fatalHelp := fmt.Sprintf("Try '%s' --help for more information.",
 		os.Args[0])
 
@@ -91,7 +102,7 @@ func main() {
 		fmt.Printf("btrfscue %d.%d\n"+
 			"Copyright (c)2011-2016 Christian Blichmann\n"+
 			"This software is BSD licensed, see the source for copying "+
-			"conditions.\n\n", VersionMajor, VersionMinor)
+			"conditions.\n\n", versionMajor, versionMinor)
 		os.Exit(0)
 	}
 	if flag.NArg() == 0 {

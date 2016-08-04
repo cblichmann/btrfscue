@@ -15,19 +15,21 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL CHRISTIAN BLICHMANN BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 package main
 
 import (
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/uuid"
 	"bytes"
 	"flag"
 	"fmt"
@@ -46,11 +48,18 @@ const (
 	FromEnd
 )
 
-func CheckedDeviceSize(rs io.ReadSeeker, blockSize uint64) (uint64, error) {
+func CheckedBtrfsDeviceSize(rs io.ReadSeeker, blockSize uint64) (uint64,
+	error) {
 	size, err := rs.Seek(0, FromEnd)
-	if err == nil && uint64(size) < blockSize {
-		err = fmt.Errorf("device smaller than block size: %d < %d", size,
-			blockSize)
+	if err == nil {
+		if uint64(size) < blockSize {
+			err = fmt.Errorf("device smaller than block size: %d < %d", size,
+				blockSize)
+		} else if uint64(size) < btrfs.SuperInfoOffset2+blockSize*100 {
+			// Sanity check: BTRFS minimum filesystem size is 64MiB plus a few
+			// blocks
+			err = fmt.Errorf("device too small, must be > 64MiB: %d", size)
+		}
 	}
 	return uint64(size), err
 }
@@ -87,16 +96,16 @@ func (a Uint64Slice) Less(i, j int) bool { return a[i] < a[j] }
 func (a Uint64Slice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a Uint64Slice) Sort()              { sort.Sort(a) }
 
-type UuidOccurrence struct {
-	Uuid    btrfs.Uuid
+type UUIDOccurrence struct {
+	UUID    uuid.UUID
 	Count   uint
 	Entropy float64
 }
 
-type UuidOccurrenceList []UuidOccurrence
+type UUIDOccurrences []UUIDOccurrence
 
-func (a UuidOccurrenceList) Len() int { return len(a) }
-func (a UuidOccurrenceList) Less(i, j int) bool {
+func (a UUIDOccurrences) Len() int { return len(a) }
+func (a UUIDOccurrences) Less(i, j int) bool {
 	ci, cj := a[i].Count, a[j].Count
 	if ci != cj {
 		return ci < cj
@@ -105,13 +114,12 @@ func (a UuidOccurrenceList) Less(i, j int) bool {
 	if ei != ej {
 		return ei < ej
 	}
-	return bytes.Compare(a[i].Uuid[:], a[j].Uuid[:]) < 0
+	return bytes.Compare(a[i].UUID[:], a[j].UUID[:]) < 0
 }
-func (a UuidOccurrenceList) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a UuidOccurrenceList) Sort()         { sort.Sort(a) }
+func (a UUIDOccurrences) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a UUIDOccurrences) Sort()         { sort.Sort(a) }
 
 type identifyCommand struct {
-	blockSize      *uint
 	sampleFraction *float64
 	minBlocks      *uint
 	maxBlocks      *uint
@@ -119,9 +127,6 @@ type identifyCommand struct {
 }
 
 func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
-	ic.blockSize = fs.Uint("block-size", btrfs.DefaultBlockSize,
-		"file system block size, usually the memory page size of the system "+
-			"that created the it")
 	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
 		"fraction of blocks to sample for filesystem ids")
 	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
@@ -144,16 +149,11 @@ func (ic *identifyCommand) Run(args []string) {
 	reportError(err)
 	defer f.Close()
 
-	blockSize := uint64(*ic.blockSize)
+	bs := uint64(*blockSize)
 
 	// Get total file/device size
-	fileSize, err := CheckedDeviceSize(f, blockSize)
+	devSize, err := CheckedBtrfsDeviceSize(f, bs)
 	reportError(err)
-
-	// Sanity check: BTRFS minimum filesystem size is 64MiB plus a few blocks
-	if uint64(fileSize) < btrfs.SuperInfoOffset2+blockSize*100 {
-		fatalf("'%s' too small, must be > 64MiB\n", filename)
-	}
 
 	// Parse sampleFraction * 100% of all blocks (minimum minBlocks, up to
 	// maxBlocks) like this:
@@ -161,7 +161,7 @@ func (ic *identifyCommand) Run(args []string) {
 	//    FSIDs.
 	// 2. Read the rest of the blocks distributed randomly and collect FSIDs
 	// Return FSIDs that are most common.
-	numBlocks := int64(fileSize / blockSize)
+	numBlocks := int64(devSize / bs)
 	numSamples := uint(*ic.sampleFraction * float64(numBlocks))
 	if numSamples < *ic.minBlocks {
 		numSamples = *ic.minBlocks
@@ -174,21 +174,21 @@ func (ic *identifyCommand) Run(args []string) {
 	rand.Seed(time.Now().UnixNano())
 	sampleSet := make(map[uint64]bool)
 	for i := 0; i < 100; i++ {
-		sampleSet[btrfs.SuperInfoOffset+uint64(i)*blockSize] = true
-		sampleSet[btrfs.SuperInfoOffset2+uint64(i+100)*blockSize] = true
+		sampleSet[btrfs.SuperInfoOffset+uint64(i)*bs] = true
+		sampleSet[btrfs.SuperInfoOffset2+uint64(i+100)*bs] = true
 	}
-	if fileSize >= btrfs.SuperInfoOffset3 {
+	if devSize >= btrfs.SuperInfoOffset3 {
 		for i := 0; i < 100; i++ {
-			sampleSet[btrfs.SuperInfoOffset3+uint64(i+200)*blockSize] = true
+			sampleSet[btrfs.SuperInfoOffset3+uint64(i+200)*bs] = true
 		}
-		if fileSize >= btrfs.SuperInfoOffset4 {
+		if devSize >= btrfs.SuperInfoOffset4 {
 			for i := 0; i < 100; i++ {
-				sampleSet[btrfs.SuperInfoOffset3+uint64(i+300)*blockSize] = true
+				sampleSet[btrfs.SuperInfoOffset3+uint64(i+300)*bs] = true
 			}
 		}
 	}
 	for uint(len(sampleSet)) < numSamples {
-		sampleSet[uint64(rand.Int63n(numBlocks))*blockSize] = true
+		sampleSet[uint64(rand.Int63n(numBlocks))*bs] = true
 	}
 
 	// Sort samples vector to access device in one direction only
@@ -198,33 +198,34 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 	samples.Sort()
 
-	buf := make([]byte, blockSize)
+	buf := make([]byte, bs)
+	p := btrfs.NewParseBuffer(buf)
 	h := btrfs.Header{}
-	zeroFsId := btrfs.Uuid{}
-	ffffFsId := btrfs.Uuid{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	ffffFSID := uuid.UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
-	hist := make(map[btrfs.Uuid]uint)
+	hist := make(map[uuid.UUID]uint)
 	for _, offset := range samples {
-		reportError(ReadBlockAt(f, buf, offset, blockSize))
-		h.Parse(buf)
+		reportError(ReadBlockAt(f, buf, offset, bs))
+		p.Rewind()
+		h.Parse(p)
 		// Only gather blocks that look like leaves
 		if !h.IsLeaf() {
 			continue
 		}
 		// Skip blocks with zero FSID or with an FSID that consists only of
 		// 0xFF bytes
-		if h.FsId == zeroFsId || h.FsId == ffffFsId {
+		if h.FSID.IsZero() || h.FSID == ffffFSID {
 			continue
 		}
-		hist[h.FsId]++
+		hist[h.FSID]++
 	}
 
 	// Sort FSIDs by number of times found, skip items that occur less than
-	// four times.
-	occ := make(UuidOccurrenceList, 0, len(hist))
+	// minOccurrence times.
+	occ := make(UUIDOccurrences, 0, len(hist))
 	for uuid, count := range hist {
 		if count > *ic.minOccurrence {
-			occ = append(occ, UuidOccurrence{uuid, count,
+			occ = append(occ, UUIDOccurrence{uuid, count,
 				ShannonEntropy(uuid[:])})
 		}
 	}
@@ -233,7 +234,7 @@ func (ic *identifyCommand) Run(args []string) {
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
 	fmt.Fprintln(w, "fsid\tcount\tentropy")
 	for _, entry := range occ {
-		fmt.Fprintf(w, "%s\t%d\t%.6f\n", entry.Uuid, entry.Count,
+		fmt.Fprintf(w, "%s\t%d\t%.6f\n", entry.UUID, entry.Count,
 			entry.Entropy)
 	}
 	w.Flush()

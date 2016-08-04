@@ -2,7 +2,7 @@
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to recover data from filesystem images using metadata
+ * Custom data type for UUIDs
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,20 +25,48 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package uuid // import "blichmann.eu/code/btrfscue/uuid"
 
 import (
-	"flag"
+	"encoding/hex"
+	"fmt"
+	"strings"
 )
 
-type recoverCommand struct {
-	clobber *bool
+const UUIDSize = 16
+
+type UUID [UUIDSize]byte
+
+func (u UUID) IsZero() bool {
+	return u == UUID{}
 }
 
-func (rc *recoverCommand) DefineFlags(fs *flag.FlagSet) {
-	rc.clobber = fs.Bool("clobber", false,
-		"overwrite existing files")
+func (u UUID) String() string {
+	const hexChars = "0123456789abcdef"
+	buf := [UUIDSize*2 + 4]byte{}
+	p := 0
+	for i, v := range u {
+		buf[p] = hexChars[v>>4]
+		p++
+		buf[p] = hexChars[v&0xF]
+		if i == 3 || i == 5 || i == 7 || i == 9 {
+			p++
+			buf[p] = '-'
+		}
+		p++
+	}
+	return string(buf[:])
 }
 
-func (rc *recoverCommand) Run([]string) {
+func (u *UUID) Set(value string) error {
+	b, err := hex.DecodeString(strings.Replace(value, "-", "", -1))
+	if len(b) != UUIDSize {
+		err = fmt.Errorf("expected %d hex characters plus optional dashes",
+			UUIDSize*2)
+	}
+	if err != nil {
+		return err
+	}
+	copy(u[:], b)
+	return nil
 }
