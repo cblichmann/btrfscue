@@ -33,6 +33,8 @@ import (
 	"strings"
 )
 
+// Set backed by a sorted array. All operations preserve the invariant that
+// the underlying array is sorted.
 type Set interface {
 	// Inserts a new element into the set. Returns the inserted element and a
 	// bool that indicates whether the element was inserted.
@@ -55,6 +57,9 @@ type Set interface {
 	Float64At(i int) float64
 	StringAt(i int) string
 
+	// Finds the index in Data() where v would be inserted.
+	LowerBound(from, to int, v interface{}) int
+
 	// Direct access to the backing array.
 	Data() []interface{}
 	Cap() int
@@ -62,15 +67,27 @@ type Set interface {
 	sort.Interface
 }
 
+// MultiSet is a Set that allows duplicates.
 type MultiSet interface {
+	UpperBound(from, to int, v interface{}) int
+	EqualRange(from, to int, v interface{}) (low, high int)
+
 	Set
 }
 
+// IntCompare is a convenience function that compares two integers
+// lexicographically. It typecasts its arguments to int.
 func IntCompare(a, b interface{}) int { return a.(int) - b.(int) }
+
+// Float64Compare compares two float64 values by typecasting its arguments.
+// This function is provided for convenience. See IntCompare().
 func Float64Compare(a, b interface{}) int {
 	r := math.Float64bits(a.(float64) - b.(float64))
 	return int(int32(r | r>>32 /* Always keep sign bit */))
 }
+
+// StringCompare compares two strings by typecasting its arguments. Provided
+// for convenience, see IntCompare().
 func StringCompare(a, b interface{}) int {
 	return strings.Compare(a.(string), b.(string))
 }
@@ -100,9 +117,7 @@ type container struct {
 	array           []interface{}
 }
 
-func (s container) At(i int) interface{} {
-	return s.array[i]
-}
+func (s container) At(i int) interface{} { return s.array[i] }
 
 func (s *container) EraseAt(i int) {
 	copy(s.array[i:], s.array[i+1:])
@@ -118,13 +133,9 @@ func (s *container) StringAt(i int) string { return s.array[i].(string) }
 
 func (s container) Data() []interface{} { return s.array }
 
-func (s container) Cap() int {
-	return cap(s.array)
-}
+func (s container) Cap() int { return cap(s.array) }
 
-func (s container) Len() int {
-	return len(s.array)
-}
+func (s container) Len() int { return len(s.array) }
 
 func (s container) Less(i, j int) bool {
 	return s.compare(s.array[i], s.array[j]) < 0
@@ -134,14 +145,26 @@ func (s container) Swap(i, j int) {
 	s.array[i], s.array[j] = s.array[j], s.array[i]
 }
 
-func (s *container) findInsertionPos(v interface{}) int {
-	return sort.Search(s.Len(), func(i int) bool {
-		return s.compare(s.array[i], v) >= 0
+func (s *container) LowerBound(from, to int, v interface{}) int {
+	return sort.Search(to-from, func(i int) bool {
+		return s.compare(s.array[from+i], v) >= 0
 	})
 }
 
+func (s *container) UpperBound(from, to int, v interface{}) int {
+	return sort.Search(to-from, func(i int) bool {
+		return s.compare(s.array[from+i], v) < 0
+	})
+}
+
+func (s *container) EqualRange(from, to int, v interface{}) (low, high int) {
+	low = s.LowerBound(from, to, v)
+	high = s.UpperBound(low, to, v)
+	return
+}
+
 func (s *container) Insert(v interface{}) (interface{}, bool) {
-	i := s.findInsertionPos(v)
+	i := s.LowerBound(0, s.Len(), v)
 	swap := false
 	if i < s.Len() && s.compare(s.array[i], v) == 0 {
 		if s.insertionPolicy == noDuplicates {
@@ -162,7 +185,7 @@ func (s *container) Insert(v interface{}) (interface{}, bool) {
 }
 
 func (s *container) Find(v interface{}) int {
-	p := s.findInsertionPos(v)
+	p := s.LowerBound(0, s.Len(), v)
 	if p < s.Len() && s.compare(s.array[p], v) == 0 {
 		return p
 	}

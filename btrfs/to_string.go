@@ -31,7 +31,7 @@ import (
 	"fmt"
 )
 
-func ObjectIdString(id uint64) string {
+func ObjectIDString(id uint64) string {
 	switch id {
 	case RootTreeObjectId:
 		return "BTRFS_ROOT_TREE_OBJECTID"
@@ -47,6 +47,16 @@ func ObjectIdString(id uint64) string {
 		return "BTRFS_ROOT_TREE_DIR_OBJECTID"
 	case CSumTreeObjectId:
 		return "BTRFS_CSUM_TREE_OBJECTID"
+	case QuotaTreeObjectId:
+		return "BTRFS_QUOTA_TREE_OBJECTID"
+	case UuidTreeObjectId:
+		return "BTRFS_UUID_OBJECTID"
+	case FreeSpaceTreeObjectId:
+		return "BTRFS_FREES_SPACE_TREE_OBJECTID"
+	case DevStatsObjectId:
+		return "BTRFS_DEV_STATS_OBJECTID"
+	case BalanceObjectId:
+		return "BTRFS_BALANCE_OBJECTID"
 	case OrphanObjectId:
 		return "BTRFS_ORPHAN_OBJECTID"
 	case TreeLogObjectId:
@@ -61,7 +71,9 @@ func ObjectIdString(id uint64) string {
 		return "BTRFS_EXTENT_CSUM_OBJECTID"
 	case FreeSpaceObjectId:
 		return "BTRFS_FREE_SPACE_OBJECTID"
-	case MultipleObjectIdS:
+	case FreeInoObjectId:
+		return "BTRFS_FREE_INO_OBJECTID"
+	case MultipleObjectIds:
 		return "BTRFS_MULTIPLE_OBJECTIDS"
 	case FirstFreeObjectId:
 		return "BTRFS_FIRST_FREE_OBJECTID"
@@ -136,12 +148,16 @@ func KeyTypeString(t uint8) string {
 		return "BTRFS_QGROUP_INFO_KEY"
 	case QgroupRelationKey:
 		return "BTRFS_QGROUP_RELATION_KEY"
-	case BalanceItemKey:
-		return "BTRFS_BALANCE_ITEM_KEY"
-	case DevStatsKey:
-		return "BTRFS_DEV_STATS_KEY"
+	case TemporaryItemKey:
+		return "BTRFS_TEMPORARY_ITEM_KEY"
+	case PersistentItemKey:
+		return "BTRFS_PERSISTENT_ITEM_KEY"
 	case DevReplaceKey:
 		return "BTRFS_DEV_REPLACE_KEY"
+	case UUIDKeySubvol:
+		return "BTRFS_UUID_KEY_SUBVOL"
+	case UUIDKeyReceivedSubvol:
+		return "BTRFS_UUID_KEY_RECEIVED_SUBVOL"
 	case StringItemKey:
 		return "BTRFS_STRING_ITEM_KEY"
 	default:
@@ -150,6 +166,6 @@ func KeyTypeString(t uint8) string {
 }
 
 func (k Key) String() string {
-	return fmt.Sprintf("key (%s %s %d=%#[3]x)", ObjectIdString(k.ObjectId),
+	return fmt.Sprintf("key (%s %s %d=%#[3]x)", ObjectIDString(k.ObjectID),
 		KeyTypeString(k.Type), k.Offset)
 }

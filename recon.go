@@ -28,43 +28,21 @@
 package main
 
 import (
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/ordered"
-	"blichmann.eu/code/btrfscue/uuid"
 	"flag"
-	"fmt"
 	"io"
 	"os"
+
+	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/uuid"
 )
 
-type index struct {
-	ordered.Set
-}
+//func (idx *index) ItemAt(i int) *btrfs.Item {
+//	return idx.At(i).(*btrfs.Item)
+//}
 
-func keyCompare(a, b interface{}) int {
-	ai := a.(*btrfs.Item)
-	bi := b.(*btrfs.Item)
-	if r := int(ai.Type - bi.Type); r != 0 {
-		return r
-	}
-	if ai.ObjectId < bi.ObjectId {
-		return -1
-	}
-	if ai.ObjectId > bi.ObjectId {
-		return 1
-	}
-	if ai.Offset < bi.Offset {
-		return -1
-	}
-	if ai.Offset > bi.Offset {
-		return 1
-	}
-	return 0
-}
-
-func NewIndex() *index {
-	return &index{ordered.NewSet(keyCompare)}
-}
+//func (idx *index) KeyAt(i int) *btrfs.Key {
+//	return &idx.At(i).(*btrfs.Item).Key
+//}
 
 type reconCommand struct {
 	id uuid.UUID
@@ -75,6 +53,18 @@ func (c *reconCommand) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (c *reconCommand) Run(args []string) {
+	//i2 := ordered.NewMultiSet(ordered.IntCompare, 10, 20, 30, 30, 20, 10, 10, 20)
+	//for i := range i2.Data() {
+	//	verbosef("%d ", i2.IntAt(i))
+	//}
+	//verbosef("\n")
+	//
+	//low := i2.LowerBound(0, i2.Len(), 20)
+	//high := i2.UpperBound(low, i2.Len(), 20)
+	//verbosef("%d %d\n", low, high)
+	//
+	//return
+
 	if len(args) == 0 {
 		fatalf("missing device file\n")
 	}
@@ -96,7 +86,7 @@ func (c *reconCommand) Run(args []string) {
 	b := btrfs.NewParseBuffer(buf)
 	l := btrfs.Leaf{}
 
-	index := NewIndex()
+	index := btrfs.NewIndex()
 
 	// Start right after the superblock
 	for offset := uint64(btrfs.SuperInfoOffset) + bs; offset < devSize &&
@@ -104,14 +94,16 @@ func (c *reconCommand) Run(args []string) {
 		reportError(ReadBlockAt(f, buf, offset, bs))
 		b.Rewind()
 		l.Header.Parse(b)
-		headerEnd := uint32(b.Offset())
-		// Skip this header if it has the wrong FSID or is empty. Also skip
-		// all non-leaves (although they should never be stored on disk).
-		if l.Header.FSID != c.id || l.Header.NrItems == 0 {
+		//headerEnd := uint32(b.Offset())
+		// Skip this header if it has the wrong FSID or is empty.
+		if l.FSID != c.id || l.NrItems == 0 {
 			continue
 		}
-		if !l.Header.IsLeaf() {
-			warnf("found non-leaf at offset %d\n", offset)
+		// Also skip all non-leaves (although they should never be stored on
+		// disk).
+		if !l.IsLeaf() {
+			// TODO(cblichmann): Find out why this sometimes happens
+			warnf("found non-leaf at offset %d, level %d\n", offset, l.Level)
 			continue
 		}
 		if l.Header.ByteNr != offset {
@@ -119,26 +111,41 @@ func (c *reconCommand) Run(args []string) {
 			//warnf("expected leaf offset %d, got %d\n", offset, l.Header.ByteNr)
 		}
 		l.Parse(b)
-		for i, _ := range l.Items {
-			item := &l.Items[i]
-			b.SetOffset(int(headerEnd + item.Offset))
-
-			_, found := index.Insert(item)
-			fmt.Printf("%s %t\n", item.Key, found)
-
-			switch data := item.Data.(type) {
-			case *btrfs.InodeItem:
-				verbosef("inode %d\n", data.Generation)
-			case *btrfs.InodeRefItem:
-				verbosef("inode ref %s\n", data.Name)
-			case *btrfs.DirItem:
-				verbosef("dir item %s\n", data.Name)
-			case *btrfs.BlockGroupItem:
-				verbosef("block %d\n", data.ChunkObjectId)
-			default:
-				//warnf("unknown item key type at offset %d: %d\n", offset, item.Type)
-			}
+		for i := range l.Items {
+			index.Insert(&l.Items[i])
 		}
-		//break //DBG!!!
+		//switch data := item.Data.(type) {
+		//case *btrfs.FileExtentItem:
+		//verbosef("file extent item: %s", data.Data)
+		//case *btrfs.RootRef:
+		//	verbosef("root ref %s %s\n", btrfs.KeyTypeString(item.Type), data.Name)
+		//case *btrfs.InodeItem:
+		//	verbosef("inode %d\n", data.Generation)
+		//case *btrfs.InodeRefItem:
+		//	verbosef("inode ref %s\n", data.Name)
+		//case *btrfs.DirItem:
+		//	verbosef("dir item %s\n", data.Name)
+		//case *btrfs.BlockGroupItem:
+		//	verbosef("block %d\n", data.ChunkObjectID)
+		//default:
+		//	//warnf("unknown item key type at offset %d: %d\n", offset, item.Type)
+		//}
 	}
+
+	for i, end := index.RangeSubvolumes(); i < end; i++ {
+		item := index.ItemAt(i)
+		data := item.Data.(*btrfs.RootItem)
+		verbosef("root item %d %d %s\n", data.RootDirID, data.Generation,
+			item.Key)
+	}
+	verbosef("\n")
+	first := btrfs.KeyFirst(btrfs.DirItemKey, 256)
+	last := btrfs.KeyLast(btrfs.DirItemKey, 256)
+	verbosef("\n")
+	for i, end := index.Range(first, last); i < end; i++ {
+		item := index.ItemAt(i)
+		data := item.Data.(*btrfs.DirItem)
+		verbosef("dir item %s %s\n", data.Name, data.Location)
+	}
+	verbosef("\n")
 }

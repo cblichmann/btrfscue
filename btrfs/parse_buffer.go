@@ -29,6 +29,7 @@ package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
 	"encoding/binary"
+	"time"
 )
 
 // ParseBuffer is similar to bytes.Buffer, except that it is read-only and can
@@ -90,4 +91,8 @@ func (b *ParseBuffer) NextUint32() uint32 {
 
 func (b *ParseBuffer) NextUint64() uint64 {
 	return b.ByteOrder.Uint64(b.Next(8))
+}
+
+func (b *ParseBuffer) NextTime() time.Time {
+	return time.Unix(int64(b.NextUint64()), int64(b.NextUint32()))
 }

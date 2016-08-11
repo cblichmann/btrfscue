@@ -28,14 +28,17 @@
 package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
-	"blichmann.eu/code/btrfscue/uuid"
 	"time"
+
+	"blichmann.eu/code/btrfscue/uuid"
 )
 
 const (
-	// "_BHRfS_M" in little-endian
+	// Magic spells "_BHRfS_M" in little-endian
 	Magic = 0x4D5F53665248425F
 
+	// DefaultBlockSize is the default block size for BTRFS. It is the size
+	// of a single page on x86 (4096 bytes).
 	DefaultBlockSize = 1 << 12
 )
 
@@ -73,7 +76,22 @@ const (
 	// Holds checksums of all the data extents
 	CSumTreeObjectId = 7
 
-	// Orhpan objectid for tracking unlinked/truncated files
+	// Holds quota configuration and tracking
+	QuotaTreeObjectId = 8
+
+	// For storing items that use the BTRFS_UUID_KEY* types
+	UuidTreeObjectId = 9
+
+	// Tracks free space in block groups
+	FreeSpaceTreeObjectId = 10
+
+	// Device stats in the device tree
+	DevStatsObjectId = 0
+
+	// For storing balance parameters in the root tree
+	BalanceObjectId = ^uint64(4) + 1
+
+	// Orphan objectid for tracking unlinked/truncated files
 	OrphanObjectId = ^uint64(5) + 1
 
 	// Does write ahead logging to speed up fsyncs
@@ -88,11 +106,15 @@ const (
 	// logging tree for fsyncs.
 	ExtentCSumObjectId = ^uint64(10) + 1
 
-	// For storing free space cache */
+	// For storing free space cache
 	FreeSpaceObjectId = ^uint64(11) + 1
 
+	// The inode number assigned to the special inode for storing free inode
+	// cache
+	FreeInoObjectId = ^uint64(12) + 1
+
 	// Dummy objectid represents multiple objectids
-	MultipleObjectIdS = ^uint64(255) + 1
+	MultipleObjectIds = ^uint64(255) + 1
 
 	// All files have objectids in this range
 	FirstFreeObjectId      = 256
@@ -106,6 +128,9 @@ const (
 	BtreeInodeObjectId = 1
 
 	EmptySubvolDirObjectId = 2
+
+	// Maximum value of an objectid
+	LastObjectId = ^uint64(0)
 )
 
 // Entity sizes
@@ -211,21 +236,58 @@ const (
 	// (parentid, BTRFS_QGROUP_RELATION_KEY, childid)
 	QgroupRelationKey = 246
 
-	BalanceItemKey = 248
+	// Obsolete name, see BTRFS_TEMPORARY_ITEM_KEY
+	BalanceItemKey = TemporaryItemKey
 
-	// Persistantly stores the io stats in the device tree.
-	// One key for all stats, (0, BTRFS_DEV_STATS_KEY, devid).
-	DevStatsKey = 249
+	// The key type for tree items that are stored persistently, but do not need
+	// to exist for extended period of time. The items can exist in any tree.
+	//
+	// [subtype, BTRFS_TEMPORARY_ITEM_KEY, data]
+	//
+	// Existing items:
+	//
+	// - balance status item
+	//   (BTRFS_BALANCE_OBJECTID, BTRFS_TEMPORARY_ITEM_KEY, 0)
+	TemporaryItemKey = 248
+
+	// Obsolete name, see BTRFS_PERSISTENT_ITEM_KEY
+	DevStatsKey = PersistentItemKey
+
+	// The key type for tree items that are stored persistently and usually
+	// exist for a long period, eg. filesystem lifetime. The item kinds can be
+	// status information, stats or preference values. The item can exist in
+	// any tree.
+	//
+	// [subtype, BTRFS_PERSISTENT_ITEM_KEY, data]
+	//
+	// Existing items:
+	//
+	// - device statistics, store IO stats in the device tree, one key for all
+	//   stats
+	//   (BTRFS_DEV_STATS_OBJECTID, BTRFS_DEV_STATS_KEY, 0)
+	PersistentItemKey = 249
 
 	// Persistantly stores the device replace state in the device tree.
 	// The key is built like this: (0, BTRFS_DEV_REPLACE_KEY, 0).
 	DevReplaceKey = 250
+
+	// Stores items that allow to quickly map UUIDs to something else.
+	// These items are part of the filesystem UUID tree.
+	// The key is built like this:
+	// (UUID_upper_64_bits, BTRFS_UUID_KEY*, UUID_lower_64_bits).
+	//
+	// For UUIDs assigned to subvols
+	UUIDKeySubvol = 251
+
+	// For UUIDs assigned to received subvols
+	UUIDKeyReceivedSubvol = 252
 
 	// String items are for debugging. They just store a short string of data
 	// in the FS.
 	StringItemKey = 253
 )
 
+// CSum holds raw checksum bytes
 type CSum [CSumSize]byte
 
 type Header struct {
@@ -261,13 +323,13 @@ func (h *Header) IsLeaf() bool {
 }
 
 type Key struct {
-	ObjectId uint64
+	ObjectID uint64
 	Type     uint8
 	Offset   uint64
 }
 
 func (k *Key) Parse(b *ParseBuffer) {
-	k.ObjectId = b.NextUint64()
+	k.ObjectID = b.NextUint64()
 	k.Type = b.NextUint8()
 	k.Offset = b.NextUint64()
 }
@@ -330,8 +392,8 @@ type InodeItem struct {
 	Nbytes     uint64
 	BlockGroup uint64
 	Nlink      uint32
-	Uid        uint32
-	Gid        uint32
+	UID        uint32
+	GID        uint32
 	Mode       uint32
 	Rdev       uint64
 	Flags      uint64
@@ -355,17 +417,17 @@ func (i *InodeItem) Parse(b *ParseBuffer) {
 	i.Nbytes = b.NextUint64()
 	i.BlockGroup = b.NextUint64()
 	i.Nlink = b.NextUint32()
-	i.Uid = b.NextUint32()
-	i.Gid = b.NextUint32()
+	i.UID = b.NextUint32()
+	i.GID = b.NextUint32()
 	i.Mode = b.NextUint32()
 	i.Rdev = b.NextUint64()
 	i.Flags = b.NextUint64()
 	i.Sequence = b.NextUint64()
 	b.Next(4 * 8)
-	i.Atime = time.Unix(int64(b.NextUint64()), int64(b.NextUint32()))
-	i.Ctime = time.Unix(int64(b.NextUint64()), int64(b.NextUint32()))
-	i.Mtime = time.Unix(int64(b.NextUint64()), int64(b.NextUint32()))
-	i.Otime = time.Unix(int64(b.NextUint64()), int64(b.NextUint32()))
+	i.Atime = b.NextTime()
+	i.Ctime = b.NextTime()
+	i.Mtime = b.NextTime()
+	i.Otime = b.NextTime()
 }
 
 type InodeRefItem struct {
@@ -383,6 +445,20 @@ func (i *InodeRefItem) Parse(b *ParseBuffer) {
 	}
 	i.Name = string(b.Next(l))
 }
+
+// Directory item type
+const (
+	FtUnknown = 0
+	FtRegFile
+	FtDir
+	FtChrdev
+	FtBlkdev
+	FtFifo
+	FtSock
+	FtSymlink
+	FtXattr
+	FtMax
+)
 
 type DirItem struct {
 	Location Key
@@ -414,15 +490,21 @@ func (i *DirItem) Parse(b *ParseBuffer) {
 
 type BlockGroupItem struct {
 	Used          uint64
-	ChunkObjectId uint64
+	ChunkObjectID uint64
 	Flags         uint64
 }
 
 func (i *BlockGroupItem) Parse(b *ParseBuffer) {
 	i.Used = b.NextUint64()
-	i.ChunkObjectId = b.NextUint64()
+	i.ChunkObjectID = b.NextUint64()
 	i.Flags = b.NextUint64()
 }
+
+const (
+	FileExtentInline = 0
+	FileExtentReg
+	FileExtentPreAlloc
+)
 
 type FileExtentItem struct {
 	// Transaction id that created this extent
@@ -432,7 +514,7 @@ type FileExtentItem struct {
 	// compressed extent we can't know how big each of the resulting pieces
 	// will be. So, this is an upper limit on the size of the extent in ram
 	// instead of an exact limit.
-	RamBytes uint64
+	RAMBytes uint64
 
 	// 32 bits for the various ways we might encode the data, including
 	// compression and encryption. If any of these are set to something a
@@ -449,6 +531,7 @@ type FileExtentItem struct {
 	// these numbers.
 
 	// At this offset in the structure, the inline extent data start.
+	// The following fields are valid only if Type != FileExtentInline:
 	DiskByteNr   uint64
 	DiskNumBytes uint64
 
@@ -461,20 +544,30 @@ type FileExtentItem struct {
 	// The logical number of file blocks (no csums included). This always
 	// reflects the size uncompressed and without encoding.
 	NumBytes uint64
+
+	// This field is only set if Type == FileExtentInline:
+	Data string
 }
 
 func (i *FileExtentItem) Parse(b *ParseBuffer) {
 	i.Generation = b.NextUint64()
-	i.RamBytes = b.NextUint64()
+	i.RAMBytes = b.NextUint64()
 	i.Compression = b.NextUint8()
 	i.Encryption = b.NextUint8()
 	i.OtherEncoding = b.NextUint16()
 	i.Type = b.NextUint8()
-	// TODO(cblichmann): Inline extents
-	i.DiskByteNr = b.NextUint64()
-	i.DiskNumBytes = b.NextUint64()
-	i.Offset = b.NextUint64()
-	i.NumBytes = b.NextUint64()
+	if i.Type != FileExtentInline {
+		i.DiskByteNr = b.NextUint64()
+		i.DiskNumBytes = b.NextUint64()
+		i.Offset = b.NextUint64()
+		i.NumBytes = b.NextUint64()
+	} else {
+		l := int(i.RAMBytes)
+		if l > DefaultBlockSize {
+			l = DefaultBlockSize
+		}
+		i.Data = string(b.Next(l))
+	}
 }
 
 type CSumItem struct {
@@ -489,7 +582,7 @@ func (i *CSumItem) Parse(b *ParseBuffer) {
 type RootItem struct {
 	Inode        InodeItem
 	Generation   uint64
-	RootDirId    uint64
+	RootDirID    uint64
 	ByteNr       uint64
 	ByteLimit    uint64
 	BytesUsed    uint64
@@ -508,22 +601,26 @@ type RootItem struct {
 	// is written out, the "generation" field is copied into this field. If
 	// anyone ever mounted the fs with an older kernel, we will have
 	// mismatching generation values here and thus must invalidate the
-	// new fields.}
+	// new fields.
 	GenerationV2 uint64
 	UUID         uuid.UUID
 	ParentUUID   uuid.UUID
 	ReceivedUUID uuid.UUID
-	CTransId     uint64
-	OTransId     uint64
-	STransId     uint64
-	RTransId     uint64
+	CTransID     uint64 // Updated when an inode changes
+	OTransID     uint64 // Trans when created
+	STransID     uint64 // Trans when sent. Non-zero for received subvol
+	RTransID     uint64 // Trans when received. Non-zero for received subvol
+	Ctime        time.Time
+	Otime        time.Time
+	Stime        time.Time
+	Rtime        time.Time
 	Reserved     [8]uint64
 }
 
 func (i *RootItem) Parse(b *ParseBuffer) {
 	i.Inode.Parse(b)
 	i.Generation = b.NextUint64()
-	i.RootDirId = b.NextUint64()
+	i.RootDirID = b.NextUint64()
 	i.ByteNr = b.NextUint64()
 	i.ByteLimit = b.NextUint64()
 	i.LastSnapshot = b.NextUint64()
@@ -537,11 +634,15 @@ func (i *RootItem) Parse(b *ParseBuffer) {
 		copy(i.UUID[:], b.Next(uuid.UUIDSize))
 		copy(i.ParentUUID[:], b.Next(uuid.UUIDSize))
 		copy(i.ReceivedUUID[:], b.Next(uuid.UUIDSize))
-		i.CTransId = b.NextUint64()
-		i.OTransId = b.NextUint64()
-		i.STransId = b.NextUint64()
-		i.RTransId = b.NextUint64()
-		for j, _ := range i.Reserved {
+		i.CTransID = b.NextUint64()
+		i.OTransID = b.NextUint64()
+		i.STransID = b.NextUint64()
+		i.RTransID = b.NextUint64()
+		i.Ctime = b.NextTime()
+		i.Otime = b.NextTime()
+		i.Stime = b.NextTime()
+		i.Rtime = b.NextTime()
+		for j := range i.Reserved {
 			i.Reserved[j] = b.NextUint64()
 		}
 	}
@@ -549,14 +650,14 @@ func (i *RootItem) Parse(b *ParseBuffer) {
 
 // This is used for both forward and backward root refs
 type RootRef struct {
-	DirId    uint64
+	DirID    uint64
 	Sequence uint64
 	NameLen  uint16
 	Name     string
 }
 
 func (i *RootRef) Parse(b *ParseBuffer) {
-	i.DirId = b.NextUint64()
+	i.DirID = b.NextUint64()
 	i.Sequence = b.NextUint64()
 	i.NameLen = b.NextUint16()
 	l := int(i.NameLen)
@@ -565,6 +666,11 @@ func (i *RootRef) Parse(b *ParseBuffer) {
 	}
 	i.Name = string(b.Next(l))
 }
+
+const (
+	ExtentFlagData      = 1 << iota
+	ExtentFlagTreeBlock = 1 << iota
+)
 
 // Items in the extent btree are used to record the objectid of the
 // owner of the block and the number of references.
@@ -599,10 +705,10 @@ func (l *Leaf) Parse(b *ParseBuffer) {
 	}
 
 	l.Items = make([]Item, numItems)
-	for i, _ := range l.Items {
+	for i := range l.Items {
 		l.Items[i].Parse(b)
 	}
-	for i, _ := range l.Items {
+	for i := range l.Items {
 		item := &l.Items[i]
 		b.SetOffset(int(headerEnd + item.Offset))
 		item.ParseData(b)

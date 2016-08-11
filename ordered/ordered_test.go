@@ -28,9 +28,15 @@
 package ordered // import "blichmann.eu/code/btrfscue/ordered"
 
 import (
+	"math/rand"
 	"sort"
 	"testing"
 )
+
+type pair struct {
+	First  int
+	Second int
+}
 
 func TestIntCompare(t *testing.T) {
 	if IntCompare(10, 10) != 0 {
@@ -74,15 +80,55 @@ func TestSetConstruction(t *testing.T) {
 
 func TestInsertion(t *testing.T) {
 	s := NewSet(IntCompare, 3, 2, 1)
-	for i := 8; i != 4; i-- {
+	for i := 8; i > 3; i-- {
 		s.Insert(i)
 	}
 	if !sort.IsSorted(s) {
 		t.FailNow()
 	}
+	for i, _ := range s.Data() {
+		if s.IntAt(i) != i+1 {
+			t.Fatalf("%d vs %d", s.IntAt(i), i+1)
+		}
+	}
 	_, didInsert := s.Insert(2)
 	if didInsert {
 		t.FailNow()
+	}
+}
+
+func TestRandomInsertion(t *testing.T) {
+	s := NewSet(IntCompare)
+	const n = 1000
+	for i := 0; i < n; i++ {
+		s.Insert(rand.Intn(n * 10))
+	}
+	last := 0
+	for i, _ := range s.Data() {
+		cur := s.IntAt(i)
+		if cur < last {
+			t.Fatalf("%d vs %d", cur, last)
+		}
+		last = cur
+	}
+}
+
+func TestInsertionWithPairs(t *testing.T) {
+	s := NewSet(func(a, b interface{}) int {
+		if r := a.(pair).First - b.(pair).First; r != 0 {
+			return r
+		}
+		return a.(pair).Second - b.(pair).Second
+	})
+	s.Insert(pair{1, 80})
+	s.Insert(pair{4, 10})
+	s.Insert(pair{3, 20})
+	s.Insert(pair{2, 30})
+	s.Insert(pair{1, 20})
+	s.Insert(pair{1, 40})
+	for i, v := range s.Data() {
+		p := v.(pair)
+		t.Logf("%d: %d %d", i, p.First, p.Second)
 	}
 }
 
@@ -111,11 +157,6 @@ func TestMultiSetConstruction(t *testing.T) {
 	if !sort.IsSorted(s) {
 		t.FailNow()
 	}
-}
-
-type pair struct {
-	First  int
-	Second int
 }
 
 func TestMultiInsertion(t *testing.T) {
