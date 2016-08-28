@@ -28,54 +28,78 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"io"
 	"os"
 
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
 )
 
-//func (idx *index) ItemAt(i int) *btrfs.Item {
-//	return idx.At(i).(*btrfs.Item)
-//}
-
-//func (idx *index) KeyAt(i int) *btrfs.Key {
-//	return &idx.At(i).(*btrfs.Item).Key
-//}
-
 type reconCommand struct {
-	id uuid.UUID
+	id     uuid.UUID
+	append bool
 }
 
 func (c *reconCommand) DefineFlags(fs *flag.FlagSet) {
 	fs.Var(&c.id, "id", "UUID of the filesystem (see identify)")
+	fs.BoolVar(&c.append, "append", false, "append to metadata file")
+}
+
+// WriteIndex writes the filesystem metadata index to the specified Writer.
+// It uses the Gob enconding to write out the actual elements.
+func WriteIndex(w io.Writer, fs *btrfs.Index) error {
+	enc := gob.NewEncoder(w)
+	for i := 0; i < fs.Len(); i++ {
+		if err := enc.Encode(fs.Item(i)); err != nil {
+			fatalf("%s\n", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ReadIndex reads a Gob encoded filesystem metadata index from a Reader.
+func ReadIndex(r io.Reader, fs *btrfs.Index) error {
+	dec := gob.NewDecoder(r)
+	for {
+		item := &btrfs.Item{}
+		if err := dec.Decode(&item); err == nil {
+			fs.Insert(item)
+		} else if err != io.EOF {
+			return err
+		} else {
+			break
+		}
+	}
+	return nil
 }
 
 func (c *reconCommand) Run(args []string) {
-	//i2 := ordered.NewMultiSet(ordered.IntCompare, 10, 20, 30, 30, 20, 10, 10, 20)
-	//for i := range i2.Data() {
-	//	verbosef("%d ", i2.IntAt(i))
-	//}
-	//verbosef("\n")
-	//
-	//low := i2.LowerBound(0, i2.Len(), 20)
-	//high := i2.UpperBound(low, i2.Len(), 20)
-	//verbosef("%d %d\n", low, high)
-	//
-	//return
-
 	if len(args) == 0 {
 		fatalf("missing device file\n")
 	}
 	if len(args) > 1 {
 		fatalf("extra operand '%s'\n", args[1])
 	}
+	if len(*metadata) == 0 {
+		fatalf("missing metadata option\n")
+	}
 
 	filename := args[0]
 	f, err := os.Open(filename)
 	reportError(err)
 	defer f.Close()
+
+	mode := os.O_RDWR | os.O_CREATE
+	if !c.append {
+		mode |= os.O_TRUNC
+	}
+	m, err := os.OpenFile(*metadata, mode, 0666)
+	reportError(err)
+	defer m.Close()
 
 	bs := uint64(*blockSize)
 
@@ -86,15 +110,14 @@ func (c *reconCommand) Run(args []string) {
 	b := btrfs.NewParseBuffer(buf)
 	l := btrfs.Leaf{}
 
-	index := btrfs.NewIndex()
+	fs := btrfs.NewIndex()
 
-	// Start right after the superblock
+	// Start right after the first superblock
 	for offset := uint64(btrfs.SuperInfoOffset) + bs; offset < devSize &&
 		err != io.EOF; offset += bs {
 		reportError(ReadBlockAt(f, buf, offset, bs))
 		b.Rewind()
 		l.Header.Parse(b)
-		//headerEnd := uint32(b.Offset())
 		// Skip this header if it has the wrong FSID or is empty.
 		if l.FSID != c.id || l.NrItems == 0 {
 			continue
@@ -103,49 +126,38 @@ func (c *reconCommand) Run(args []string) {
 		// disk).
 		if !l.IsLeaf() {
 			// TODO(cblichmann): Find out why this sometimes happens
-			warnf("found non-leaf at offset %d, level %d\n", offset, l.Level)
+			//warnf("found non-leaf at offset %d, level %d\n", offset, l.Level)
 			continue
 		}
 		if l.Header.ByteNr != offset {
 			// TODO(cblichmann): Are these backup leaves?
-			//warnf("expected leaf offset %d, got %d\n", offset, l.Header.ByteNr)
+			//warnf("expected leaf offset %d, got %d\n", offset,
+			//	l.Header.ByteNr)
 		}
+		// Given he := uint32(b.Offset()), after the following call to
+		// Parse(), the free space of a leaf is between offsets
+		// [ he, l.Items[Len(l.Items) - 1].Offset ).
 		l.Parse(b)
 		for i := range l.Items {
-			index.Insert(&l.Items[i])
+			fs.Insert(&l.Items[i])
+			//item := &l.Items[i]
+			//if ii, ok := item.Data.(*btrfs.InodeItem); ok {
+			//	if item.Key.ObjectID != 264 {
+			//		continue
+			//	}
+			//	verbosef("%s %d %d %d %d %d\n", item.Key, ii.Size, ii.BlockGroup, ii.Generation, ii.Transid, ii.Sequence)
+			//}
 		}
-		//switch data := item.Data.(type) {
-		//case *btrfs.FileExtentItem:
-		//verbosef("file extent item: %s", data.Data)
-		//case *btrfs.RootRef:
-		//	verbosef("root ref %s %s\n", btrfs.KeyTypeString(item.Type), data.Name)
-		//case *btrfs.InodeItem:
-		//	verbosef("inode %d\n", data.Generation)
-		//case *btrfs.InodeRefItem:
-		//	verbosef("inode ref %s\n", data.Name)
-		//case *btrfs.DirItem:
-		//	verbosef("dir item %s\n", data.Name)
-		//case *btrfs.BlockGroupItem:
-		//	verbosef("block %d\n", data.ChunkObjectID)
-		//default:
-		//	//warnf("unknown item key type at offset %d: %d\n", offset, item.Type)
-		//}
 	}
 
-	for i, end := index.RangeSubvolumes(); i < end; i++ {
-		item := index.ItemAt(i)
-		data := item.Data.(*btrfs.RootItem)
-		verbosef("root item %d %d %s\n", data.RootDirID, data.Generation,
-			item.Key)
+	// TODO(cblichmann): Add callback to allow to display progress.
+	reportError(WriteIndex(m, &fs))
+	for i := 0; i < fs.Len(); i++ {
+		verbosef("%s\n", fs.Key(i))
 	}
-	verbosef("\n")
-	first := btrfs.KeyFirst(btrfs.DirItemKey, 256)
-	last := btrfs.KeyLast(btrfs.DirItemKey, 256)
-	verbosef("\n")
-	for i, end := index.Range(first, last); i < end; i++ {
-		item := index.ItemAt(i)
-		data := item.Data.(*btrfs.DirItem)
-		verbosef("dir item %s %s\n", data.Name, data.Location)
-	}
-	verbosef("\n")
+}
+
+func init() {
+	subcommand.Register("recon", "gather metadata for later use",
+		&reconCommand{})
 }

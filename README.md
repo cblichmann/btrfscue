@@ -113,16 +113,16 @@ Data recovery with btrfscue is divided in stages:
      ```
   3. Save metadata for later analysis. This may take a long time to finish
      as the whole image is being scanned. You need to specify the filesystem
-     to look out for by using the -u parameter with a filesystem id FSID.
+     to look out for by using the --id parameter with a filesystem id FSID.
      ```
-     btrfscue recon --id FSID --metadata metadata.sqlite DISKIMAGE
+     btrfscue recon --id FSID --metadata metadata.db DISKIMAGE
      ```
   4. Inspect the metadata dump to help decide what to restore later.
      ```
-     btrfscue --metadata metadata.sqlite ls /
-     btrfscue --metadata metadata.sqlite ls /#sub:default/
-     btrfscue --metadata metadata.sqlite ls /#snap:a_snapshot/
-     btrfscue --metadata metadata.sqlite find --type f --name '*.cpp'
+     btrfscue --metadata metadata.db ls /
+     btrfscue --metadata metadata.db ls /#sub:some_subvolume/
+     btrfscue --metadata metadata.db ls /#snap:a_snapshot/
+     btrfscue --metadata metadata.db find --type f --name '*.cpp'
      ...
      ```
   5. Restore the actual data. For example, restore all of the files,
@@ -131,7 +131,7 @@ Data recovery with btrfscue is divided in stages:
      snapshot data placed in separate sub-directories with the respective
      filesystem entity name.
      ```
-     btrfscue --metadata metadata.sqlite recover DISKIMAGE /
+     btrfscue --metadata metadata.db recover DISKIMAGE /
      ```
 
 

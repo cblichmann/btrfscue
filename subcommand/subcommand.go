@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -40,8 +41,14 @@ type Command interface {
 	Run(arguments []string)
 }
 
+type subCommand struct {
+	desc string
+	cmd  Command
+	hide bool
+}
+
 type CommandSet struct {
-	commands      map[string]Command
+	commands      map[string]*subCommand
 	parsedCommand Command
 	errorHandling flag.ErrorHandling
 	args          []string
@@ -50,7 +57,7 @@ type CommandSet struct {
 
 func NewCommandSet(errorHandling flag.ErrorHandling) *CommandSet {
 	return &CommandSet{
-		commands:      make(map[string]Command),
+		commands:      make(map[string]*subCommand),
 		errorHandling: errorHandling,
 	}
 }
@@ -68,9 +75,14 @@ func (c *CommandSet) SetOutput(output io.Writer) {
 	c.output = output
 }
 
-func (c *CommandSet) Register(name string, command Command) Command {
-	c.commands[name] = command
-	return command
+func (c *CommandSet) Register(name, desc string, cmd Command) Command {
+	c.commands[name] = &subCommand{desc: desc, cmd: cmd}
+	return cmd
+}
+
+func (c *CommandSet) RegisterHidden(name string, cmd Command) Command {
+	c.commands[name] = &subCommand{hide: true, cmd: cmd}
+	return cmd
 }
 
 func (c *CommandSet) Parse(arguments []string) error {
@@ -91,14 +103,14 @@ func (c *CommandSet) Parse(arguments []string) error {
 		return nil
 	}
 
-	var ok bool
 	var err error = nil
-	if c.parsedCommand, ok = c.commands[cmdName]; !ok {
+	if parsed, ok := c.commands[cmdName]; !ok {
 		err = fmt.Errorf("'%s' is not a valid command", cmdName)
 		fmt.Fprintln(c.out(), err)
 	} else {
 		fs := flag.NewFlagSet(cmdName, c.errorHandling)
 		fs.SetOutput(c.output)
+		c.parsedCommand = parsed.cmd
 		c.parsedCommand.DefineFlags(fs)
 		err = fs.Parse(arguments[cmdPos+1:])
 		c.args = fs.Args()
@@ -125,11 +137,24 @@ func (c *CommandSet) Run(arguments []string) {
 	c.parsedCommand.Run(arguments)
 }
 
-// TODO(cblichmann): VisitAll() and other useful functions from the flag
-//                   package.
+func (c *CommandSet) VisitAll(fn func(name, desc string, cmd Command)) {
+	names := make([]string, 0, len(c.commands))
+	for k, _ := range c.commands {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		sub := c.commands[n]
+		if !sub.hide {
+			fn(n, sub.desc, sub.cmd)
+		}
+	}
+}
 
-func Register(name string, command Command) Command {
-	return Commands.Register(name, command)
+// TODO(cblichmann): Other useful functions from the flag package.
+
+func Register(name, description string, cmd Command) Command {
+	return Commands.Register(name, description, cmd)
 }
 
 func Parse(arguments []string) {
@@ -138,6 +163,10 @@ func Parse(arguments []string) {
 
 func Run() {
 	Commands.Run(Commands.Args())
+}
+
+func VisitAll(fn func(name, desc string, cmd Command)) {
+	Commands.VisitAll(fn)
 }
 
 var Commands = NewCommandSet(flag.ExitOnError)

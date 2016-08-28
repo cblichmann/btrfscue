@@ -36,11 +36,11 @@ import (
 // Set backed by a sorted array. All operations preserve the invariant that
 // the underlying array is sorted.
 type Set interface {
-	// Inserts a new element into the set. Returns the inserted element and a
-	// bool that indicates whether the element was inserted.
+	// Inserts a new element into the set. Returns the position of the
+	// element and a bool that indicates whether the element was inserted.
 	// Complexity: O(log(n)) for searching plus a linear cost for relocating
 	// elements if insertion was not at the end of the backing array.
-	Insert(value interface{}) (maybeInserted interface{}, didInsert bool)
+	Insert(value interface{}) (maybeInsertedAt int, didInsert bool)
 
 	Find(value interface{}) int
 
@@ -152,8 +152,8 @@ func (s *container) LowerBound(from, to int, v interface{}) int {
 }
 
 func (s *container) UpperBound(from, to int, v interface{}) int {
-	return sort.Search(to-from, func(i int) bool {
-		return s.compare(s.array[from+i], v) < 0
+	return from + sort.Search(to-from, func(i int) bool {
+		return s.compare(s.array[from+i], v) > 0
 	})
 }
 
@@ -163,12 +163,12 @@ func (s *container) EqualRange(from, to int, v interface{}) (low, high int) {
 	return
 }
 
-func (s *container) Insert(v interface{}) (interface{}, bool) {
+func (s *container) Insert(v interface{}) (int, bool) {
 	i := s.LowerBound(0, s.Len(), v)
 	swap := false
 	if i < s.Len() && s.compare(s.array[i], v) == 0 {
 		if s.insertionPolicy == noDuplicates {
-			return s.array[i], false
+			return i, false
 		}
 		swap = true
 	}
@@ -181,7 +181,7 @@ func (s *container) Insert(v interface{}) (interface{}, bool) {
 	} else {
 		s.array[i], s.array[i+1] = s.array[i+1], v
 	}
-	return s.array[i], true
+	return i, true
 }
 
 func (s *container) Find(v interface{}) int {

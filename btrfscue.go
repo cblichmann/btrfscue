@@ -28,11 +28,12 @@
 package main
 
 import (
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/subcommand"
 	"flag"
 	"fmt"
 	"os"
+
+	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/subcommand"
 )
 
 const (
@@ -43,18 +44,23 @@ const (
 var (
 	// Global options
 	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
-		"file system block size, usually the memory page"+
+		"filesystem block size, usually the memory page"+
 			"size of the system that created it")
 	metadata = flag.String("metadata", "", "metadata database to use")
 
 	help    = flag.Bool("help", false, "display this help and exit")
 	verbose = flag.Bool("verbose", false, "explain what is being done")
 	version = flag.Bool("version", false, "display version and exit")
-
-	identifyCmd = subcommand.Register("identify", &identifyCommand{})
-	reconCmd    = subcommand.Register("recon", &reconCommand{})
-	recoverCmd  = subcommand.Register("recover", &recoverCommand{})
 )
+
+type helpCommand struct{}
+
+func (hc *helpCommand) DefineFlags(fs *flag.FlagSet) {}
+func (hc *helpCommand) Run(args []string)            { printUsage() }
+
+func init() {
+	subcommand.Commands.RegisterHidden("help", &helpCommand{})
+}
 
 func warnf(format string, v ...interface{}) {
 	fmt.Fprintf(os.Stderr, "btrfscue: "+format, v...)
@@ -80,7 +86,12 @@ func reportError(err error) {
 // Prints more GNU-looking usage text.
 func printUsage() {
 	fmt.Printf("Usage: %s COMMAND [OPTION]...\n"+
-		"Recover data from damaged BTRFS filesystems.\n\n", os.Args[0])
+		"Recover data from damaged BTRFS filesystems.\n\n"+
+		"Commands:\n", os.Args[0])
+	subcommand.VisitAll(func(name, desc string, cmd subcommand.Command) {
+		fmt.Printf("  %-9s %s\n", name, desc)
+	})
+	fmt.Printf("\nCommon options:\n")
 	flag.VisitAll(func(f *flag.Flag) {
 		fmt.Printf("      --%-23s %s\n", f.Name, f.Usage)
 	})

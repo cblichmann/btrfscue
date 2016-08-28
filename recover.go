@@ -29,6 +29,10 @@ package main
 
 import (
 	"flag"
+	"os"
+
+	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/subcommand"
 )
 
 type recoverCommand struct {
@@ -41,4 +45,42 @@ func (rc *recoverCommand) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (rc *recoverCommand) Run([]string) {
+	if len(*metadata) == 0 {
+		fatalf("missing metadata option\n")
+	}
+
+	m, err := os.Open(*metadata)
+	reportError(err)
+	defer m.Close()
+
+	fs := btrfs.NewIndex()
+	reportError(ReadIndex(m, &fs))
+
+	inode := uint64(264) // src.zip
+	ii := fs.InodeItem(fs.FindInodeItem(inode))
+	verbosef("file size: %d\n", ii.Size)
+
+	lo := uint64(0)
+	for i, end := fs.Range(
+		btrfs.KeyFirst(btrfs.ExtentDataKey, inode),
+		btrfs.KeyLast(btrfs.ExtentDataKey, inode)); i < end; i++ {
+		fe := fs.Item(i).Data.(*btrfs.FileExtentItem)
+		lo = fe.DiskByteNr
+		verbosef("file extent: %s %d %d %d %d\n", fs.Key(i),
+			lo, fe.DiskNumBytes, fe.NumBytes, fe.Offset)
+		_, of := fs.Physical(lo)
+		verbosef("%d\n", of)
+	}
+
+	for i, end := fs.Range(
+		btrfs.KeyFirst(btrfs.ChunkItemKey),
+		btrfs.KeyLast(btrfs.ChunkItemKey)); i < end; i++ {
+		c := fs.Chunk(i)
+		verbosef("%s %d 0x%x\n", fs.Key(i), c.Length, c.Stripes[0].Offset)
+	}
+}
+
+func init() {
+	subcommand.Register("recover",
+		"try to restore files from a damaged filesystem", &recoverCommand{})
 }

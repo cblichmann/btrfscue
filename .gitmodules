@@ -1,0 +1,3 @@
+[submodule "vendor/github.com/hanwen/go-fuse"]
+	path = vendor/github.com/hanwen/go-fuse
+	url = https://github.com/hanwen/go-fuse.git

@@ -28,8 +28,6 @@
 package main
 
 import (
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/uuid"
 	"bytes"
 	"flag"
 	"fmt"
@@ -40,6 +38,10 @@ import (
 	"sort"
 	"text/tabwriter"
 	"time"
+
+	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/subcommand"
+	"blichmann.eu/code/btrfscue/uuid"
 )
 
 const (
@@ -96,16 +98,17 @@ func (a Uint64Slice) Less(i, j int) bool { return a[i] < a[j] }
 func (a Uint64Slice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a Uint64Slice) Sort()              { sort.Sort(a) }
 
-type UUIDOccurrence struct {
-	UUID    uuid.UUID
-	Count   uint
-	Entropy float64
+type foundFSEntry struct {
+	FSID      uuid.UUID
+	Count     uint
+	Entropy   float64
+	BlockSize uint32
 }
 
-type UUIDOccurrences []UUIDOccurrence
+type foundFSEntries []foundFSEntry
 
-func (a UUIDOccurrences) Len() int { return len(a) }
-func (a UUIDOccurrences) Less(i, j int) bool {
+func (a foundFSEntries) Len() int { return len(a) }
+func (a foundFSEntries) Less(i, j int) bool {
 	ci, cj := a[i].Count, a[j].Count
 	if ci != cj {
 		return ci < cj
@@ -114,10 +117,10 @@ func (a UUIDOccurrences) Less(i, j int) bool {
 	if ei != ej {
 		return ei < ej
 	}
-	return bytes.Compare(a[i].UUID[:], a[j].UUID[:]) < 0
+	return bytes.Compare(a[i].FSID[:], a[j].FSID[:]) < 0
 }
-func (a UUIDOccurrences) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a UUIDOccurrences) Sort()         { sort.Sort(a) }
+func (a foundFSEntries) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a foundFSEntries) Sort()         { sort.Sort(a) }
 
 type identifyCommand struct {
 	sampleFraction *float64
@@ -199,15 +202,19 @@ func (ic *identifyCommand) Run(args []string) {
 	samples.Sort()
 
 	buf := make([]byte, bs)
-	p := btrfs.NewParseBuffer(buf)
+	b := btrfs.NewParseBuffer(buf)
 	h := btrfs.Header{}
 	ffffFSID := uuid.UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
-	hist := make(map[uuid.UUID]uint)
+	type histEntry struct {
+		Count     uint
+		BlockSize uint32
+	}
+	hist := make(map[uuid.UUID]*histEntry)
 	for _, offset := range samples {
 		reportError(ReadBlockAt(f, buf, offset, bs))
-		p.Rewind()
-		h.Parse(p)
+		b.Rewind()
+		h.Parse(b)
 		// Only gather blocks that look like leaves
 		if !h.IsLeaf() {
 			continue
@@ -217,25 +224,44 @@ func (ic *identifyCommand) Run(args []string) {
 		if h.FSID.IsZero() || h.FSID == ffffFSID {
 			continue
 		}
-		hist[h.FSID]++
+		entry, ok := hist[h.FSID]
+		if !ok {
+			entry = &histEntry{}
+			hist[h.FSID] = entry
+		} else {
+			if h.NrItems > 0 {
+				item := btrfs.Item{}
+				item.Parse(b)
+				// Since item headers and their data grow towards each other,
+				// the first item's offset will be the largest. Try to guess the
+				// block size from that.
+				entry.BlockSize = uint32((uint64(item.Offset) + bs/2) / bs * bs)
+			}
+		}
+		entry.Count++
 	}
 
 	// Sort FSIDs by number of times found, skip items that occur less than
 	// minOccurrence times.
-	occ := make(UUIDOccurrences, 0, len(hist))
-	for uuid, count := range hist {
-		if count > *ic.minOccurrence {
-			occ = append(occ, UUIDOccurrence{uuid, count,
-				ShannonEntropy(uuid[:])})
+	occ := make(foundFSEntries, 0, len(hist))
+	for uuid, entry := range hist {
+		if entry.Count > *ic.minOccurrence {
+			occ = append(occ, foundFSEntry{uuid, entry.Count,
+				ShannonEntropy(uuid[:]), entry.BlockSize})
 		}
 	}
 	sort.Sort(sort.Reverse(occ))
 
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
-	fmt.Fprintln(w, "fsid\tcount\tentropy")
+	fmt.Fprintln(w, "fsid\tcount\tentropy\tblock size")
 	for _, entry := range occ {
-		fmt.Fprintf(w, "%s\t%d\t%.6f\n", entry.UUID, entry.Count,
-			entry.Entropy)
+		fmt.Fprintf(w, "%s\t%d\t%d\t%.6f\n", entry.FSID, entry.Count,
+			entry.Entropy, entry.BlockSize)
 	}
 	w.Flush()
+}
+
+func init() {
+	subcommand.Register("identify",
+		"identify BTRFS filesystems on a device", &identifyCommand{})
 }

@@ -70,7 +70,7 @@ func (b *ParseBuffer) Unread() int {
 
 // Next returns a slice containing the next n bytes from the buffer and
 // advancing it. Panics if there are fewer than n bytes in the buffer.
-// The slice is only valid until the next call to a read or write method.
+// The slice is only valid until the next call to one of the next methods.
 func (b *ParseBuffer) Next(n int) []byte {
 	data := b.buf[b.offset : b.offset+n]
 	b.offset += n

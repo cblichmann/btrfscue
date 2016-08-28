@@ -28,14 +28,17 @@
 package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
+	"encoding/gob"
 	"time"
 
 	"blichmann.eu/code/btrfscue/uuid"
+
+	"fmt" //DBG!!!
 )
 
 const (
 	// Magic spells "_BHRfS_M" in little-endian
-	Magic = 0x4D5F53665248425F
+	Magic = 0x4d5f53665248425f
 
 	// DefaultBlockSize is the default block size for BTRFS. It is the size
 	// of a single page on x86 (4096 bytes).
@@ -166,7 +169,7 @@ const (
 	// an entire extent on disk.
 	ExtentCSumKey = 128
 
-	// root items point to tree roots. They are typically in the root
+	// Root items point to tree roots. They are typically in the root
 	// tree used by the super block to find all the other trees.
 	RootItemKey = 132
 
@@ -183,11 +186,13 @@ const (
 	// are used, and how many references there are to each block.
 	ExtentItemKey = 168
 
-	// The same as the BTRFS_EXTENT_ITEM_KEY, except it's metadata we already
-	// know the length, so we save the level in key->offset instead of the
+	// The same as the ExtentItemKey, except it's metadata we already know
+	// the length, so we save the level in key->offset instead of the
 	// length.
 	MetadataItemKey = 169
 
+	// These are contained within an extent item.
+	// TODO(cblichmann): Parse these
 	TreeBlockRefKey   = 176
 	ExtentDataRefKey  = 178
 	ExtentRefV0Key    = 180
@@ -334,7 +339,7 @@ func (k *Key) Parse(b *ParseBuffer) {
 	k.Offset = b.NextUint64()
 }
 
-type itemData interface {
+type parseable interface {
 	Parse(b *ParseBuffer)
 }
 
@@ -342,7 +347,7 @@ type Item struct {
 	Key
 	Offset uint32
 	Size   uint32
-	Data   itemData
+	Data   parseable
 }
 
 func (i *Item) Parse(b *ParseBuffer) {
@@ -374,13 +379,161 @@ func (i *Item) ParseData(b *ParseBuffer) {
 	case RootRefKey:
 		i.Data = &RootRef{}
 	case ExtentItemKey:
+		i.Data = &ExtentItem{compatV0: i.Size < 8+8+8}
+	case MetadataItemKey:
+		// TODO(cblichmann): Special metadata handling for extents
 		i.Data = &ExtentItem{}
 	case BlockGroupItemKey:
 		i.Data = &BlockGroupItem{}
+	case DevExtentKey:
+		i.Data = &DevExtent{}
+	case DevItemKey:
+		i.Data = &DevItem{}
+	case ChunkItemKey:
+		i.Data = &Chunk{}
 	default:
 		return
 	}
-	i.Data.Parse(b)
+	i.Data.(parseable).Parse(b)
+}
+
+// Dev extents record free space on individual devices. The owner field
+// points back to the chunk allocation mapping tree that allocated the
+// extent. The chunk tree uuid field is a way to double check the owner.
+type DevExtent struct {
+	ChunkTree     uint64
+	ChunkObjectID uint64
+	ChunkOffset   uint64
+	Length        uint64
+	ChunkTreeUUID uuid.UUID
+}
+
+func (i *DevExtent) Parse(b *ParseBuffer) {
+	i.ChunkTree = b.NextUint64()
+	i.ChunkObjectID = b.NextUint64()
+	i.Length = b.NextUint64()
+	copy(i.ChunkTreeUUID[:], b.Next(uuid.UUIDSize))
+}
+
+type DevItem struct {
+	// The internal BTRFS device id
+	DevID uint64
+
+	// Size of the device
+	TotalBytes uint64
+
+	// Bytes used
+	BytesUsed uint64
+
+	// Optimal I/O alignment for this device
+	IOAlign uint32
+
+	// Optimal I/O width for this device
+	IOWidth uint32
+
+	// Minimal I/O size for this device
+	SectorSize uint32
+
+	// Type and info about this device
+	Type uint64
+
+	// Expected generation for this device
+	Generation uint64
+
+	// Starting byte of this partition on the device, to allow for stripe
+	// alignment in the future
+	StartOffset uint64
+
+	// Grouping information for allocation decisions
+	DevGroup uint32
+
+	// Seek speed 0-100 where 100 is fastest
+	SeekSpeed uint8
+
+	// Bandwidth 0-100 where 100 is fastest
+	Bandwidth uint8
+
+	// BTRFS generated UUID for this device
+	UUID uuid.UUID
+
+	// UUID of FS that owns this device
+	FSID uuid.UUID
+}
+
+func (i *DevItem) Parse(b *ParseBuffer) {
+	i.DevID = b.NextUint64()
+	i.TotalBytes = b.NextUint64()
+	i.BytesUsed = b.NextUint64()
+	i.IOAlign = b.NextUint32()
+	i.IOWidth = b.NextUint32()
+	i.SectorSize = b.NextUint32()
+	i.Type = b.NextUint64()
+	i.Generation = b.NextUint64()
+	i.StartOffset = b.NextUint64()
+	i.DevGroup = b.NextUint32()
+	i.SeekSpeed = b.NextUint8()
+	i.Bandwidth = b.NextUint8()
+	copy(i.UUID[:], b.Next(uuid.UUIDSize))
+	copy(i.FSID[:], b.Next(uuid.UUIDSize))
+}
+
+type Stripe struct {
+	DevID   uint64
+	Offset  uint64
+	DevUUID uuid.UUID
+}
+
+func (i *Stripe) Parse(b *ParseBuffer) {
+	i.DevID = b.NextUint64()
+	i.Offset = b.NextUint64()
+	copy(i.DevUUID[:], b.Next(uuid.UUIDSize))
+}
+
+type Chunk struct {
+	// Size of this chunk in bytes
+	Length uint64
+
+	// ObjectID of the root referencing this chunk
+	Owner uint64
+
+	StripeLen uint64
+	Type      uint64
+
+	// Optimal IO alignment for this chunk
+	IOAlign uint32
+
+	// Optimal IO width for this chunk
+	IOWidth uint32
+
+	// Minimal IO size for this chunk
+	SectorSize uint32
+
+	// 2^16 stripes is quite a lot, a second limit is the size of a single
+	// item in the btree
+	NumStripes uint16
+
+	// Sub stripes only matter for raid10
+	SubStripes uint16
+	Stripes    []Stripe
+}
+
+func (i *Chunk) Parse(b *ParseBuffer) {
+	i.Length = b.NextUint64()
+	i.Owner = b.NextUint64()
+	i.StripeLen = b.NextUint64()
+	i.Type = b.NextUint64()
+	i.IOAlign = b.NextUint32()
+	i.IOWidth = b.NextUint32()
+	i.SectorSize = b.NextUint32()
+	i.NumStripes = b.NextUint16()
+	i.SubStripes = b.NextUint16()
+
+	// Do not limit the number of stripes we allocated here. Worst case is
+	// 64k stripes.
+	i.Stripes = make([]Stripe, i.NumStripes)
+	for s := 0; s < int(i.NumStripes); s++ {
+		i.Stripes[s].Parse(b)
+	}
 }
 
 type InodeItem struct {
@@ -403,7 +556,7 @@ type InodeItem struct {
 
 	// A little future expansion, for more than this we can just grow the
 	// inode item and version it.
-	reserved [4]uint64
+	Reserved [4]uint64
 	Atime    time.Time
 	Ctime    time.Time
 	Mtime    time.Time
@@ -423,11 +576,13 @@ func (i *InodeItem) Parse(b *ParseBuffer) {
 	i.Rdev = b.NextUint64()
 	i.Flags = b.NextUint64()
 	i.Sequence = b.NextUint64()
-	b.Next(4 * 8)
-	i.Atime = b.NextTime()
-	i.Ctime = b.NextTime()
-	i.Mtime = b.NextTime()
-	i.Otime = b.NextTime()
+	for j, _ := range i.Reserved {
+		i.Reserved[j] = b.NextUint64()
+	}
+	i.Atime = b.NextTime().UTC()
+	i.Ctime = b.NextTime().UTC()
+	i.Mtime = b.NextTime().UTC()
+	i.Otime = b.NextTime().UTC()
 }
 
 type InodeRefItem struct {
@@ -448,7 +603,7 @@ func (i *InodeRefItem) Parse(b *ParseBuffer) {
 
 // Directory item type
 const (
-	FtUnknown = 0
+	FtUnknown = iota
 	FtRegFile
 	FtDir
 	FtChrdev
@@ -488,6 +643,22 @@ func (i *DirItem) Parse(b *ParseBuffer) {
 	i.Data = string(b.Next(l))
 }
 
+func (i *DirItem) IsDir() bool { return i.Type == FtDir }
+
+const (
+	BlockGroupData = 1 << iota
+	BlockGroupSystem
+	BlockGroupMetadata
+	BlockGroupRaid0
+	BlockGroupRaid1
+	BlockGroupDup
+	BlockGroupRaid10
+	BlockGroupRaid5
+	BlockGroupRaid6
+	// TODO(cblichmann): More constants and the block group masks
+	// BlockGroupReserved = AVAIL_ALLOC_BIT_SINGLE | SPACE_INFO_GLOBAL_RSV
+)
+
 type BlockGroupItem struct {
 	Used          uint64
 	ChunkObjectID uint64
@@ -501,7 +672,7 @@ func (i *BlockGroupItem) Parse(b *ParseBuffer) {
 }
 
 const (
-	FileExtentInline = 0
+	FileExtentInline = iota
 	FileExtentReg
 	FileExtentPreAlloc
 )
@@ -638,10 +809,10 @@ func (i *RootItem) Parse(b *ParseBuffer) {
 		i.OTransID = b.NextUint64()
 		i.STransID = b.NextUint64()
 		i.RTransID = b.NextUint64()
-		i.Ctime = b.NextTime()
-		i.Otime = b.NextTime()
-		i.Stime = b.NextTime()
-		i.Rtime = b.NextTime()
+		i.Ctime = b.NextTime().UTC()
+		i.Otime = b.NextTime().UTC()
+		i.Stime = b.NextTime().UTC()
+		i.Rtime = b.NextTime().UTC()
 		for j := range i.Reserved {
 			i.Reserved[j] = b.NextUint64()
 		}
@@ -668,8 +839,8 @@ func (i *RootRef) Parse(b *ParseBuffer) {
 }
 
 const (
-	ExtentFlagData      = 1 << iota
-	ExtentFlagTreeBlock = 1 << iota
+	ExtentFlagData = 1 << iota
+	ExtentFlagTreeBlock
 )
 
 // Items in the extent btree are used to record the objectid of the
@@ -678,13 +849,20 @@ type ExtentItem struct {
 	Refs       uint64
 	Generation uint64
 	Flags      uint64
+	compatV0   bool
 }
 
 func (i *ExtentItem) Parse(b *ParseBuffer) {
-	i.Refs = b.NextUint64()
-	i.Generation = b.NextUint64()
-	i.Flags = b.NextUint64()
+	if !i.IsCompatV0() {
+		i.Refs = b.NextUint64()
+		i.Generation = b.NextUint64()
+		i.Flags = b.NextUint64()
+	} else {
+		i.Refs = uint64(b.NextUint32())
+	}
 }
+
+func (i *ExtentItem) IsCompatV0() bool { return i.compatV0 }
 
 type Leaf struct {
 	Header
@@ -710,7 +888,28 @@ func (l *Leaf) Parse(b *ParseBuffer) {
 	}
 	for i := range l.Items {
 		item := &l.Items[i]
-		b.SetOffset(int(headerEnd + item.Offset))
+		o := int(headerEnd) + int(item.Offset)
+		if o >= b.Len() {
+			continue
+		}
+		b.SetOffset(o)
 		item.ParseData(b)
 	}
+}
+
+func init() {
+	fmt.Printf("") //DBG!!!
+	// Register with custom short names
+	gob.RegisterName("BlkG", &BlockGroupItem{})
+	gob.RegisterName("CSum", &CSumItem{})
+	gob.RegisterName("Chnk", &Chunk{})
+	gob.RegisterName("DExt", &DevExtent{})
+	gob.RegisterName("DevI", &DevItem{})
+	gob.RegisterName("DirI", &DirItem{})
+	gob.RegisterName("ExtI", &ExtentItem{})
+	gob.RegisterName("FExt", &FileExtentItem{})
+	gob.RegisterName("InoR", &InodeRefItem{})
+	gob.RegisterName("Inod", &InodeItem{})
+	gob.RegisterName("Root", &RootItem{})
+	gob.RegisterName("RtRf", &RootRef{})
 }

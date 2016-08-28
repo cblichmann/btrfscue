@@ -91,9 +91,8 @@ func TestInsertion(t *testing.T) {
 			t.Fatalf("%d vs %d", s.IntAt(i), i+1)
 		}
 	}
-	_, didInsert := s.Insert(2)
-	if didInsert {
-		t.FailNow()
+	if pos, didInsert := s.Insert(2); pos != 1 || didInsert {
+		t.Fatalf("%d vs %d, %t", pos, 1, didInsert)
 	}
 }
 

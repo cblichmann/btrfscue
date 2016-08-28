@@ -34,51 +34,51 @@ import (
 func ObjectIDString(id uint64) string {
 	switch id {
 	case RootTreeObjectId:
-		return "BTRFS_ROOT_TREE_OBJECTID"
+		return "ROOT_TREE"
 	case ExtentTreeObjectId:
-		return "BTRFS_EXTENT_TREE_OBJECTID"
+		return "EXTENT_TREE"
 	case ChunkTreeObjectId:
-		return "BTRFS_CHUNK_TREE_OBJECTID"
+		return "CHUNK_TREE"
 	case DevTreeObjectId:
-		return "BTRFS_DEV_TREE_OBJECTID"
+		return "DEV_TREE"
 	case FSTreeObjectId:
-		return "BTRFS_FS_TREE_OBJECTID"
+		return "FS_TREE"
 	case RootTreeDirObjectId:
-		return "BTRFS_ROOT_TREE_DIR_OBJECTID"
+		return "ROOT_TREE_DIR"
 	case CSumTreeObjectId:
-		return "BTRFS_CSUM_TREE_OBJECTID"
+		return "CSUM_TREE"
 	case QuotaTreeObjectId:
-		return "BTRFS_QUOTA_TREE_OBJECTID"
+		return "QUOTA_TREE"
 	case UuidTreeObjectId:
-		return "BTRFS_UUID_OBJECTID"
+		return "UUID"
 	case FreeSpaceTreeObjectId:
-		return "BTRFS_FREES_SPACE_TREE_OBJECTID"
+		return "FREES_SPACE_TREE"
 	case DevStatsObjectId:
-		return "BTRFS_DEV_STATS_OBJECTID"
+		return "DEV_STATS"
 	case BalanceObjectId:
-		return "BTRFS_BALANCE_OBJECTID"
+		return "BALANCE"
 	case OrphanObjectId:
-		return "BTRFS_ORPHAN_OBJECTID"
+		return "ORPHAN"
 	case TreeLogObjectId:
-		return "BTRFS_TREE_LOG_OBJECTID"
+		return "TREE_LOG"
 	case TreeLogFixupObjectId:
-		return "BTRFS_TREE_LOG_FIXUP_OBJECTID"
+		return "TREE_LOG_FIXUP"
 	case TreeRelocObjectId:
-		return "BTRFS_TREE_RELOC_OBJECTID"
+		return "TREE_RELOC"
 	case DataRelocTreeObjectId:
-		return "BTRFS_DATA_RELOC_TREE_OBJECTID"
+		return "DATA_RELOC_TREE"
 	case ExtentCSumObjectId:
-		return "BTRFS_EXTENT_CSUM_OBJECTID"
+		return "EXTENT_CSUM"
 	case FreeSpaceObjectId:
-		return "BTRFS_FREE_SPACE_OBJECTID"
+		return "FREE_SPACE"
 	case FreeInoObjectId:
-		return "BTRFS_FREE_INO_OBJECTID"
+		return "FREE_INO"
 	case MultipleObjectIds:
-		return "BTRFS_MULTIPLE_OBJECTIDS"
+		return "MULTIPLES"
 	case FirstFreeObjectId:
-		return "BTRFS_FIRST_FREE_OBJECTID"
+		return "FIRST_FREE"
 	case LastFreeObjectId:
-		return "BTRFS_LAST_FREE_OBJECTID"
+		return "LAST_FREE"
 	default:
 		return fmt.Sprint(id)
 	}
@@ -87,79 +87,79 @@ func ObjectIDString(id uint64) string {
 func KeyTypeString(t uint8) string {
 	switch t {
 	case InodeItemKey:
-		return "BTRFS_INODE_ITEM_KEY"
+		return "INODE_ITEM"
 	case InodeRefKey:
-		return "BTRFS_INODE_REF_KEY"
+		return "INODE_REF"
 	case InodeExtrefKey:
-		return "BTRFS_INODE_EXTREF_KEY"
+		return "INODE_EXTREF"
 	case XAttrItemKey:
-		return "BTRFS_XATTR_ITEM_KEY"
+		return "XATTR_ITEM"
 	case OrphanItemKey:
-		return "BTRFS_ORPHAN_ITEM_KEY"
+		return "ORPHAN_ITEM"
 	case DirLogItemKey:
-		return "BTRFS_DIR_LOG_ITEM_KEY"
+		return "DIR_LOG_ITEM"
 	case DirLogIndexKey:
-		return "BTRFS_DIR_LOG_INDEX_KEY"
+		return "DIR_LOG_INDEX"
 	case DirItemKey:
-		return "BTRFS_DIR_ITEM_KEY"
+		return "DIR_ITEM"
 	case DirIndexKey:
-		return "BTRFS_DIR_INDEX_KEY"
+		return "DIR_INDEX"
 	case ExtentDataKey:
-		return "BTRFS_EXTENT_DATA_KEY"
+		return "EXTENT_DATA"
 	case ExtentCSumKey:
-		return "BTRFS_EXTENT_CSUM_KEY"
+		return "EXTENT_CSUM"
 	case RootItemKey:
-		return "BTRFS_ROOT_ITEM_KEY"
+		return "ROOT_ITEM"
 	case RootBackRefKey:
-		return "BTRFS_ROOT_BACKREF_KEY"
+		return "ROOT_BACKREF"
 	case RootRefKey:
-		return "BTRFS_ROOT_REF_KEY"
+		return "ROOT_REF"
 	case ExtentItemKey:
-		return "BTRFS_EXTENT_ITEM_KEY"
+		return "EXTENT_ITEM"
 	case MetadataItemKey:
-		return "BTRFS_METADATA_ITEM_KEY"
+		return "METADATA_ITEM"
 	case TreeBlockRefKey:
-		return "BTRFS_TREE_BLOCK_REF_KEY"
+		return "TREE_BLOCK_REF"
 	case ExtentDataRefKey:
-		return "BTRFS_EXTENT_DATA_REF_KEY"
+		return "EXTENT_DATA_REF"
 	case ExtentRefV0Key:
-		return "BTRFS_EXTENT_REF_V0_KEY"
+		return "EXTENT_REF_V0"
 	case SharedBlockRefKey:
-		return "BTRFS_SHARED_BLOCK_REF_KEY"
+		return "SHARED_BLOCK_REF"
 	case SharedDataRefKey:
-		return "BTRFS_SHARED_DATA_REF_KEY"
+		return "SHARED_DATA_REF"
 	case BlockGroupItemKey:
-		return "BTRFS_BLOCK_GROUP_ITEM_KEY"
+		return "BLOCK_GROUP_ITEM"
 	case FreeSpaceInfoKey:
-		return "BTRFS_FREE_SPACE_INFO_KEY"
+		return "FREE_SPACE_INFO"
 	case FreeSpaceExtentKey:
-		return "BTRFS_FREE_SPACE_EXTENT_KEY"
+		return "FREE_SPACE_EXTENT"
 	case FreeSpaceBitmapKey:
-		return "BTRFS_FREE_SPACE_BITMAP_KEY"
+		return "FREE_SPACE_BITMAP"
 	case DevExtentKey:
-		return "BTRFS_DEV_EXTENT_KEY"
+		return "DEV_EXTENT"
 	case DevItemKey:
-		return "BTRFS_DEV_ITEM_KEY"
+		return "DEV_ITEM"
 	case ChunkItemKey:
-		return "BTRFS_CHUNK_ITEM_KEY"
+		return "CHUNK_ITEM"
 	case QgroupStatusKey:
-		return "BTRFS_QGROUP_STATUS_KEY"
+		return "QGROUP_STATUS"
 	case QgroupInfoKey:
-		return "BTRFS_QGROUP_INFO_KEY"
+		return "QGROUP_INFO"
 	case QgroupRelationKey:
-		return "BTRFS_QGROUP_RELATION_KEY"
+		return "QGROUP_RELATION"
 	case TemporaryItemKey:
-		return "BTRFS_TEMPORARY_ITEM_KEY"
+		return "TEMPORARY_ITEM"
 	case PersistentItemKey:
-		return "BTRFS_PERSISTENT_ITEM_KEY"
+		return "PERSISTENT_ITEM"
 	case DevReplaceKey:
-		return "BTRFS_DEV_REPLACE_KEY"
+		return "DEV_REPLACE"
 	case UUIDKeySubvol:
-		return "BTRFS_UUID_KEY_SUBVOL"
+		return "UUID_SUBVOL"
 	case UUIDKeyReceivedSubvol:
-		return "BTRFS_UUID_KEY_RECEIVED_SUBVOL"
+		return "UUID_RECEIVED_SUBVOL"
 	case StringItemKey:
-		return "BTRFS_STRING_ITEM_KEY"
+		return "STRING_ITEM"
 	default:
 		return fmt.Sprint(t)
 	}
