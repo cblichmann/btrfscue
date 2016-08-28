@@ -1,3 +1,6 @@
 [submodule "vendor/github.com/hanwen/go-fuse"]
 	path = vendor/github.com/hanwen/go-fuse
 	url = https://github.com/hanwen/go-fuse.git
+[submodule "vendor/gopkg.in/cheggaaa/pb.v1"]
+	path = vendor/gopkg.in/cheggaaa/pb.v1
+	url = https://github.com/cheggaaa/pb.git
