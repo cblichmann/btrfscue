@@ -44,8 +44,7 @@ const (
 var (
 	// Global options
 	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
-		"filesystem block size, usually the memory page"+
-			"size of the system that created it")
+		"filesystem block size")
 	metadata = flag.String("metadata", "", "metadata database to use")
 
 	help    = flag.Bool("help", false, "display this help and exit")
@@ -119,6 +118,9 @@ func main() {
 	if flag.NArg() == 0 {
 		fatalf("missing command\n%s\n", fatalHelp)
 	}
+
+	startProfiling()
+	defer stopProfiling()
 
 	subcommand.Parse(flag.Args())
 	subcommand.Run()

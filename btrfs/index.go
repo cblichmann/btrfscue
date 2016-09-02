@@ -28,16 +28,17 @@
 package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
+	"encoding/binary"
 	"hash/crc32"
 	"sort"
 	"strings"
 
 	"blichmann.eu/code/btrfscue/ordered"
 
-	"fmt"
+	"fmt" //DBG!!!
 )
 
-func init() { fmt.Printf("") }
+func init() { fmt.Printf("") } //DBG!!!
 
 // KeyCompare compares two BTRFS keys lexicographically. It returns 0 if
 // a==b, -1 if a < b and +1 if a > b.
@@ -65,8 +66,15 @@ type Index struct {
 }
 
 func NewIndex() Index {
-	return Index{ordered.NewSet(func(a, b interface{}) int {
+	return Index{ordered.NewHashSet(func(a, b interface{}) int {
 		return KeyCompare(a.(*Item).Key, b.(*Item).Key)
+	}, func(v interface{}) string {
+		k := &v.(*Item).Key
+		data := make([]byte, 17)
+		data[0] = k.Type
+		binary.LittleEndian.PutUint64(data[1:], k.ObjectID)
+		binary.LittleEndian.PutUint64(data[9:], k.Offset)
+		return string(data)
 	})}
 }
 
@@ -75,6 +83,11 @@ func (fs *Index) Len() int { return fs.items.Len() }
 func (fs *Index) Insert(item *Item) (int, bool) {
 	return fs.items.Insert(item)
 }
+
+func (fs *Index) BatchInsert(item *Item) bool {
+	return fs.items.BatchInsert(item)
+}
+func (fs *Index) Fix() { fs.items.Fix() }
 
 func (fs *Index) Find(k Key) int {
 	if i := fs.LowerBound(k); i < fs.Len() && KeyCompare(fs.Key(i), k) == 0 {

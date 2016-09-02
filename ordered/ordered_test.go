@@ -28,6 +28,7 @@
 package ordered // import "blichmann.eu/code/btrfscue/ordered"
 
 import (
+	"encoding/binary"
 	"math/rand"
 	"sort"
 	"testing"
@@ -36,6 +37,10 @@ import (
 type pair struct {
 	First  int
 	Second int
+}
+
+func pairCompare(a, b interface{}) int {
+	return a.(pair).First - b.(pair).First
 }
 
 func TestIntCompare(t *testing.T) {
@@ -125,9 +130,12 @@ func TestInsertionWithPairs(t *testing.T) {
 	s.Insert(pair{2, 30})
 	s.Insert(pair{1, 20})
 	s.Insert(pair{1, 40})
-	for i, v := range s.Data() {
-		p := v.(pair)
-		t.Logf("%d: %d %d", i, p.First, p.Second)
+
+	// Check order of secondary value
+	for i, p := range [...]int{20, 40, 80, 30, 20, 10} {
+		if q := s.At(i).(pair).Second; q != p {
+			t.Fatalf("%d: %d vs %d", i, q, p)
+		}
 	}
 }
 
@@ -159,9 +167,7 @@ func TestMultiSetConstruction(t *testing.T) {
 }
 
 func TestMultiInsertion(t *testing.T) {
-	s := NewMultiSet(func(a, b interface{}) int {
-		return a.(pair).First - b.(pair).First
-	})
+	s := NewMultiSet(pairCompare)
 	s.Insert(pair{1, 80})
 	s.Insert(pair{4, 10})
 	s.Insert(pair{3, 20})
@@ -172,20 +178,35 @@ func TestMultiInsertion(t *testing.T) {
 		t.FailNow()
 	}
 	// Check stable order of secondary value
-	if s.At(0).(pair).Second != 80 ||
-		s.At(1).(pair).Second != 40 ||
-		s.At(2).(pair).Second != 20 {
-		t.FailNow()
+	for i, p := range [...]int{80, 20, 40, 30, 20, 10} {
+		if q := s.At(i).(pair).Second; q != p {
+			t.Fatalf("%d: %d vs %d", i, q, p)
+		}
 	}
 }
 
 func BenchmarkInsertion(b *testing.B) {
-	s := NewSet(IntCompare).(*container)
-	s.array = make([]interface{}, 0, b.N)
+	s := NewSet(IntCompare).(*DefaultSet)
+	s.Array = make([]interface{}, 0, b.N)
 	for i := 0; i < b.N/2; i++ {
 		s.Insert(i * 2)
 	}
 	for i := b.N / 2; i > 0; i-- {
 		s.Insert(i * 4)
 	}
+}
+
+func BenchmarkHashedInsertion(b *testing.B) {
+	s := NewHashSet(IntCompare, func(v interface{}) string {
+		data := make([]byte, 8)
+		binary.LittleEndian.PutUint64(data, uint64(v.(int)))
+		return string(data)
+	})
+	for i := 0; i < b.N/2; i++ {
+		s.BatchInsert(i * 2)
+	}
+	for i := b.N / 2; i > 0; i-- {
+		s.BatchInsert(i * 4)
+	}
+	s.Fix()
 }

@@ -33,6 +33,8 @@ import (
 	"io"
 	"os"
 
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
@@ -67,13 +69,14 @@ func ReadIndex(r io.Reader, fs *btrfs.Index) error {
 	for {
 		item := &btrfs.Item{}
 		if err := dec.Decode(&item); err == nil {
-			fs.Insert(item)
+			fs.BatchInsert(item)
 		} else if err != io.EOF {
 			return err
 		} else {
 			break
 		}
 	}
+	fs.Fix()
 	return nil
 }
 
@@ -104,6 +107,7 @@ func (c *reconCommand) Run(args []string) {
 	bs := uint64(*blockSize)
 
 	devSize, err := CheckedBtrfsDeviceSize(f, bs)
+	devSize = devSize - (devSize % bs)
 	reportError(err)
 
 	buf := make([]byte, bs)
@@ -112,10 +116,20 @@ func (c *reconCommand) Run(args []string) {
 
 	fs := btrfs.NewIndex()
 
+	bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
+	bar.Start()
+	defer bar.Finish()
+
 	// Start right after the first superblock
-	for offset := uint64(btrfs.SuperInfoOffset) + bs; offset < devSize &&
-		err != io.EOF; offset += bs {
-		reportError(ReadBlockAt(f, buf, offset, bs))
+	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
+		if err = ReadBlockAt(f, buf, off, bs); err != nil {
+			if err != io.EOF {
+				reportError(err)
+			} else {
+				break
+			}
+		}
+		bar.Set64(int64(off))
 		b.Rewind()
 		l.Header.Parse(b)
 		// Skip this header if it has the wrong FSID or is empty.
@@ -129,7 +143,7 @@ func (c *reconCommand) Run(args []string) {
 			//warnf("found non-leaf at offset %d, level %d\n", offset, l.Level)
 			continue
 		}
-		if l.Header.ByteNr != offset {
+		if l.Header.ByteNr != off {
 			// TODO(cblichmann): Are these backup leaves?
 			//warnf("expected leaf offset %d, got %d\n", offset,
 			//	l.Header.ByteNr)
@@ -139,22 +153,17 @@ func (c *reconCommand) Run(args []string) {
 		// [ he, l.Items[Len(l.Items) - 1].Offset ).
 		l.Parse(b)
 		for i := range l.Items {
-			fs.Insert(&l.Items[i])
-			//item := &l.Items[i]
-			//if ii, ok := item.Data.(*btrfs.InodeItem); ok {
-			//	if item.Key.ObjectID != 264 {
-			//		continue
-			//	}
-			//	verbosef("%s %d %d %d %d %d\n", item.Key, ii.Size, ii.BlockGroup, ii.Generation, ii.Transid, ii.Sequence)
-			//}
+			//fs.Insert(&l.Items[i])
+			fs.BatchInsert(&l.Items[i])
 		}
 	}
+	fs.Fix()
 
 	// TODO(cblichmann): Add callback to allow to display progress.
 	reportError(WriteIndex(m, &fs))
-	for i := 0; i < fs.Len(); i++ {
-		verbosef("%s\n", fs.Key(i))
-	}
+	//for i := 0; i < fs.Len(); i++ {
+	//	verbosef("%s\n", fs.Key(i))
+	//}
 }
 
 func init() {
