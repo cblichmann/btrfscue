@@ -28,12 +28,9 @@
 package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
-	"encoding/gob"
 	"time"
 
 	"blichmann.eu/code/btrfscue/uuid"
-
-	"fmt" //DBG!!!
 )
 
 const (
@@ -56,84 +53,84 @@ const (
 // Object ids
 const (
 	// Holds pointers to all of the tree roots
-	RootTreeObjectId = 1
+	RootTreeObjectID = 1
 
 	// Stores information about which extents are in use, and reference
 	// counts
-	ExtentTreeObjectId = 2
+	ExtentTreeObjectID = 2
 
 	// The chunk tree stores translations from logical -> physical block
 	// numbering the super block points to the chunk tree
-	ChunkTreeObjectId = 3
+	ChunkTreeObjectID = 3
 
 	// Stores information about which areas of a given device are in use. One
 	// per device. The tree of tree roots points to the device tree.
-	DevTreeObjectId = 4
+	DevTreeObjectID = 4
 
 	// One per subvolume, storing files and directories
-	FSTreeObjectId = 5
+	FSTreeObjectID = 5
 
 	// Directory objectid inside the root tree
-	RootTreeDirObjectId = 6
+	RootTreeDirObjectID = 6
 
 	// Holds checksums of all the data extents
-	CSumTreeObjectId = 7
+	CSumTreeObjectID = 7
 
 	// Holds quota configuration and tracking
-	QuotaTreeObjectId = 8
+	QuotaTreeObjectID = 8
 
 	// For storing items that use the BTRFS_UUID_KEY* types
-	UuidTreeObjectId = 9
+	UuidTreeObjectID = 9
 
 	// Tracks free space in block groups
-	FreeSpaceTreeObjectId = 10
+	FreeSpaceTreeObjectID = 10
 
 	// Device stats in the device tree
-	DevStatsObjectId = 0
+	DevStatsObjectID = 0
 
 	// For storing balance parameters in the root tree
-	BalanceObjectId = ^uint64(4) + 1
+	BalanceObjectID = ^uint64(4) + 1
 
 	// Orphan objectid for tracking unlinked/truncated files
-	OrphanObjectId = ^uint64(5) + 1
+	OrphanObjectID = ^uint64(5) + 1
 
 	// Does write ahead logging to speed up fsyncs
-	TreeLogObjectId      = ^uint64(6) + 1
-	TreeLogFixupObjectId = ^uint64(7) + 1
+	TreeLogObjectID      = ^uint64(6) + 1
+	TreeLogFixupObjectID = ^uint64(7) + 1
 
 	// For space balancing
-	TreeRelocObjectId     = ^uint64(8) + 1
-	DataRelocTreeObjectId = ^uint64(9) + 1
+	TreeRelocObjectID     = ^uint64(8) + 1
+	DataRelocTreeObjectID = ^uint64(9) + 1
 
 	// Extent checksums all have this objectid. This allows them to share the
 	// logging tree for fsyncs.
-	ExtentCSumObjectId = ^uint64(10) + 1
+	ExtentCSumObjectID = ^uint64(10) + 1
 
 	// For storing free space cache
-	FreeSpaceObjectId = ^uint64(11) + 1
+	FreeSpaceObjectID = ^uint64(11) + 1
 
 	// The inode number assigned to the special inode for storing free inode
 	// cache
-	FreeInoObjectId = ^uint64(12) + 1
+	FreeInoObjectID = ^uint64(12) + 1
 
 	// Dummy objectid represents multiple objectids
-	MultipleObjectIds = ^uint64(255) + 1
+	MultipleObjectIDs = ^uint64(255) + 1
 
 	// All files have objectids in this range
-	FirstFreeObjectId      = 256
-	LastFreeObjectId       = ^uint64(256) + 1
-	FirstChunkTreeObjectId = 256
+	FirstFreeObjectID      = 256
+	LastFreeObjectID       = ^uint64(256) + 1
+	FirstChunkTreeObjectID = 256
 
 	// The device items go into the chunk tree. The key is in the form
 	// [ 1 DevItemKey device_id ]
-	DevItemsObjectId = 1
+	DevItemsObjectID = 1
 
-	BtreeInodeObjectId = 1
+	BtreeInodeObjectID = 1
 
-	EmptySubvolDirObjectId = 2
+	EmptySubvolDirObjectID = 2
 
 	// Maximum value of an objectid
-	LastObjectId = ^uint64(0)
+	LastObjectID = ^uint64(0)
 )
 
 // Entity sizes
@@ -292,313 +289,252 @@ const (
 	StringItemKey = 253
 )
 
-// CSum holds raw checksum bytes
-type CSum [CSumSize]byte
-
-type Header struct {
-	CSum CSum
-	// The following three fields must match struct SuperBlock
-	// File system specific UUID
-	FSID uuid.UUID
-	// The start of this block relative to the begining of the backing device
-	ByteNr uint64
-	Flags  uint64
-	// Allowed to be different from SuperBlock from here on
-	ChunkTreeUUID uuid.UUID
-	Generation    uint64
-	Owner         uint64
-	NrItems       uint32
-	Level         uint8
-}
-
-func (h *Header) Parse(b *ParseBuffer) {
-	copy(h.CSum[:], b.Next(CSumSize))
-	copy(h.FSID[:], b.Next(uuid.UUIDSize))
-	h.ByteNr = b.NextUint64()
-	h.Flags = b.NextUint64()
-	copy(h.ChunkTreeUUID[:], b.Next(uuid.UUIDSize))
-	h.Generation = b.NextUint64()
-	h.Owner = b.NextUint64()
-	h.NrItems = b.NextUint32()
-	h.Level = b.NextUint8()
-}
-
-func (h *Header) IsLeaf() bool {
-	return h.Level == 0
-}
-
 type Key struct {
 	ObjectID uint64
 	Type     uint8
 	Offset   uint64
 }
 
-func (k *Key) Parse(b *ParseBuffer) {
-	k.ObjectID = b.NextUint64()
-	k.Type = b.NextUint8()
-	k.Offset = b.NextUint64()
-}
-
-type parseable interface {
-	Parse(b *ParseBuffer)
-}
-
-type Item struct {
-	Key
-	Offset uint32
-	Size   uint32
-	Data   parseable
-}
-
-func (i *Item) Parse(b *ParseBuffer) {
-	i.Key.Parse(b)
-	i.Offset = b.NextUint32()
-	i.Size = b.NextUint32()
-}
-
-func (i *Item) ParseData(b *ParseBuffer) {
-	switch i.Type {
-	case InodeItemKey:
-		i.Data = &InodeItem{}
-	case InodeRefKey:
-		i.Data = &InodeRefItem{}
-	case XAttrItemKey:
-		fallthrough
-	case DirItemKey:
-		fallthrough
-	case DirIndexKey:
-		i.Data = &DirItem{}
-	case ExtentDataKey:
-		i.Data = &FileExtentItem{}
-	case ExtentCSumKey:
-		i.Data = &CSumItem{}
-	case RootItemKey:
-		i.Data = &RootItem{}
-	case RootBackRefKey:
-		fallthrough
-	case RootRefKey:
-		i.Data = &RootRef{}
-	case ExtentItemKey:
-		i.Data = &ExtentItem{compatV0: i.Size < 8+8+8}
-	case MetadataItemKey:
-		// TODO(cblichmann): Special metadata handling for extents
-		i.Data = &ExtentItem{}
-	case BlockGroupItemKey:
-		i.Data = &BlockGroupItem{}
-	case DevExtentKey:
-		i.Data = &DevExtent{}
-	case DevItemKey:
-		i.Data = &DevItem{}
-	case ChunkItemKey:
-		i.Data = &Chunk{}
-	default:
-		return
+// KeyCompare compares two BTRFS keys lexicographically. It returns 0 if
+// a==b, -1 if a < b and +1 if a > b.
+func KeyCompare(a, b Key) int {
+	if r := int(a.Type) - int(b.Type); r != 0 {
+		return r
 	}
-	i.Data.(parseable).Parse(b)
+	if a.ObjectID < b.ObjectID {
+		return -1
+	}
+	if a.ObjectID > b.ObjectID {
+		return 1
+	}
+	if a.Offset < b.Offset {
+		return -1
+	}
+	if a.Offset > b.Offset {
+		return 1
+	}
+	return 0
 }
+
+// CSum holds raw checksum bytes
+type CSum [CSumSize]byte
 
 // Dev extents record free space on individual devices. The owner field
 // points back to the chunk allocation mapping tree that allocated the
 // extent. The chunk tree uuid field is a way to double check the owner.
-type DevExtent struct {
-	ChunkTree     uint64
-	ChunkObjectID uint64
-	ChunkOffset   uint64
-	Length        uint64
-	ChunkTreeUUID uuid.UUID
-}
+type DevExtent []byte
 
-func (i *DevExtent) Parse(b *ParseBuffer) {
-	i.ChunkTree = b.NextUint64()
-	i.ChunkObjectID = b.NextUint64()
-	i.Length = b.NextUint64()
-	copy(i.ChunkTreeUUID[:], b.Next(uuid.UUIDSize))
-}
+// Dev extent offsets for parsing from byte slice
+const (
+	devExtentChunkTree     = 0
+	devExtentChunkObjectID = devExtentChunkTree + 8
+	devExtentChunkOffset   = devExtentChunkObjectID + 8
+	devExtentLength        = devExtentChunkOffset + 8
+	devExtentChunkTreeUUID = devExtentLength + 8
+	DevExtentLen           = devExtentChunkTreeUUID + uuid.UUIDSize
+)
 
-type DevItem struct {
-	// The internal BTRFS device id
-	DevID uint64
+func (e DevExtent) ChunkTree() uint64        { return SliceUint64LE(e[devExtentChunkTree:]) }
+func (e DevExtent) ChunkObjectID() uint64    { return SliceUint64LE(e[devExtentChunkObjectID:]) }
+func (e DevExtent) ChunkOffset() uint64      { return SliceUint64LE(e[devExtentChunkOffset:]) }
+func (e DevExtent) Length() uint64           { return SliceUint64LE(e[devExtentLength:]) }
+func (e DevExtent) ChunkTreeUUID() uuid.UUID { return SliceUUID(e[devExtentChunkTreeUUID:]) }
 
-	// Size of the device
-	TotalBytes uint64
+type DevItem []byte
 
-	// Bytes used
-	BytesUsed uint64
+const (
+	devItemDevID       = 0
+	devItemTotalBytes  = devItemDevID + 8
+	devItemBytesUsed   = devItemTotalBytes + 8
+	devItemIOAlign     = devItemBytesUsed + 8
+	devItemIOWidth     = devItemIOAlign + 4
+	devItemSectorSize  = devItemIOWidth + 4
+	devItemType        = devItemSectorSize + 4
+	devItemGeneration  = devItemType + 8
+	devItemStartOffset = devItemGeneration + 8
+	devItemDevGroup    = devItemStartOffset + 8
+	devItemSeekSpeed   = devItemDevGroup + 4
+	devItemBandwidth   = devItemSeekSpeed + 1
+	devItemUUID        = devItemBandwidth + 1
+	devItemFSID        = devItemUUID + uuid.UUIDSize
+	DevItemLen         = devItemFSID + uuid.UUIDSize
+)
 
-	// Optimal I/O alignment for this device
-	IOAlign uint32
+// DevID returns the internal BTRFS device id
+func (i DevItem) DevID() uint64 { return SliceUint64LE(i[devItemDevID:]) }
 
-	// Optimal I/O width for this device
-	IOWidth uint32
+// TotalBytes returns the size of the device
+func (i DevItem) TotalBytes() uint64 { return SliceUint64LE(i[devItemTotalBytes:]) }
 
-	// Minimal I/O size for this device
-	SectorSize uint32
+// BytesUsed returns the number of bytes used
+func (i DevItem) BytesUsed() uint64 { return SliceUint64LE(i[devItemBytesUsed:]) }
 
-	// Type and info about this device
-	Type uint64
+// IOAlign return the optimal I/O alignment for this device
+func (i DevItem) IOAlign() uint32 { return SliceUint32LE(i[devItemIOAlign:]) }
 
-	// Expected generation for this device
-	Generation uint64
+// IOWidth return the optimal I/O width for this device
+func (i DevItem) IOWidth() uint32 { return SliceUint32LE(i[devItemIOWidth:]) }
 
-	// Starting byte of this partition on the device, to allow for stripe
-	// alignment in the future
-	StartOffset uint64
+// SectorSize returns the minimal I/O size for this device
+func (i DevItem) SectorSize() uint32 { return SliceUint32LE(i[devItemSectorSize:]) }
 
-	// Grouping information for allocation decisions
-	DevGroup uint32
+// Type returnst the type and info about this device
+func (i DevItem) Type() uint64 { return SliceUint64LE(i[devItemType:]) }
 
-	// Seek speed 0-100 where 100 is fastest
-	SeekSpeed uint8
+// Generation returnst the expected generation for this device
+func (i DevItem) Generation() uint64 { return SliceUint64LE(i[devItemGeneration:]) }
 
-	// Bandwidth 0-100 where 100 is fastest
-	Bandwidth uint8
+// StartOffset returns the starting byte of this partition on the device. This
+// allows for stripe alignment in the future.
+func (i DevItem) StartOffset() uint64 { return SliceUint64LE(i[devItemStartOffset:]) }
 
-	// BTRFS generated UUID for this device
-	UUID uuid.UUID
+// DevGroup return grouping information for allocation decisions
+func (i DevItem) DevGroup() uint32 { return SliceUint32LE(i[devItemDevGroup:]) }
 
-	// UUID of FS that owns this device
-	FSID uuid.UUID
-}
+// SeekSpeed returns the device seek speed in range 0-100 where 100 is fastest
+func (i DevItem) SeekSpeed() uint8 { return i[devItemSeekSpeed] }
 
-func (i *DevItem) Parse(b *ParseBuffer) {
-	i.DevID = b.NextUint64()
-	i.TotalBytes = b.NextUint64()
-	i.BytesUsed = b.NextUint64()
-	i.IOAlign = b.NextUint32()
-	i.IOWidth = b.NextUint32()
-	i.SectorSize = b.NextUint32()
-	i.Type = b.NextUint64()
-	i.Generation = b.NextUint64()
-	i.StartOffset = b.NextUint64()
-	i.DevGroup = b.NextUint32()
-	i.SeekSpeed = b.NextUint8()
-	i.Bandwidth = b.NextUint8()
-	copy(i.UUID[:], b.Next(uuid.UUIDSize))
-	copy(i.FSID[:], b.Next(uuid.UUIDSize))
-}
+// Bandwidth returnst the device bandwidth in range 0-100 where 100 is fastest
+func (i DevItem) Bandwidth() uint8 { return i[devItemBandwidth] }
 
-type Stripe struct {
-	DevID   uint64
-	Offset  uint64
-	DevUUID uuid.UUID
-}
+// UUID returns the BTRFS generated UUID for this device
+func (i DevItem) UUID() uuid.UUID { return SliceUUID(i[devItemUUID:]) }
 
-func (i *Stripe) Parse(b *ParseBuffer) {
-	i.DevID = b.NextUint64()
-	i.Offset = b.NextUint64()
-	copy(i.DevUUID[:], b.Next(uuid.UUIDSize))
-}
+// FSID returns the UUID of the FS that owns this device
+func (i DevItem) FSID() uuid.UUID { return SliceUUID(i[devItemFSID:]) }
 
-type Chunk struct {
-	// Size of this chunk in bytes
-	Length uint64
+type Stripe []byte
 
-	// ObjectID of the root referencing this chunk
-	Owner uint64
+// Stripe offsets for parsing from byte slice
+const (
+	stripeDevID   = 0
+	stripeOffset  = stripeDevID + 8
+	stripeDevUUID = stripeOffset + 8
+	stripeEnd     = stripeDevID + uuid.UUIDSize
+)
 
-	StripeLen uint64
-	Type      uint64
+func (s Stripe) DevID() uint64      { return SliceUint64LE(s[stripeDevID:]) }
+func (s Stripe) Offset() uint64     { return SliceUint64LE(s[stripeOffset:]) }
+func (s Stripe) DevUUID() uuid.UUID { return SliceUUID(s[stripeDevUUID:]) }
 
-	// Optimal IO alignment for this chunk
-	IOAlign uint32
+type Chunk []byte
 
-	// Optimal IO width for this chunk
-	IOWidth uint32
+const (
+	chunkLength     = 0
+	chunkOwner      = chunkLength + 8
+	chunkStripeLen  = chunkOwner + 8
+	chunkType       = chunkStripeLen + 8
+	chunkIOAlign    = chunkType + 8
+	chunkIOWidth    = chunkIOAlign + 4
+	chunkSectorSize = chunkIOWidth + 4
+	chunkNumStripes = chunkSectorSize + 4
+	chunkSubStripes = chunkNumStripes + 2
+	chunkStripes    = chunkSubStripes + 2
+)
 
-	// Minimal IO size for this chunk
-	SectorSize uint32
+// Size of this chunk in bytes
+func (c Chunk) Length() uint64 { return SliceUint64LE(c[chunkLength:]) }
 
-	// 2^16 stripes is quite a lot, a second limit is the size of a single
-	// item in the btree
-	NumStripes uint16
+// ObjectID of the root referencing this chunk
+func (c Chunk) Owner() uint64 { return SliceUint64LE(c[chunkOwner:]) }
 
-	// Sub stripes only matter for raid10
-	SubStripes uint16
-	Stripes    []Stripe
-}
+func (c Chunk) StripeLen() uint64 { return SliceUint64LE(c[chunkStripeLen:]) }
+func (c Chunk) Type() uint64      { return SliceUint64LE(c[chunkType:]) }
 
-func (i *Chunk) Parse(b *ParseBuffer) {
-	i.Length = b.NextUint64()
-	i.Owner = b.NextUint64()
-	i.StripeLen = b.NextUint64()
-	i.Type = b.NextUint64()
-	i.IOAlign = b.NextUint32()
-	i.IOWidth = b.NextUint32()
-	i.SectorSize = b.NextUint32()
-	i.NumStripes = b.NextUint16()
-	i.SubStripes = b.NextUint16()
+// Optimal IO alignment for this chunk
+func (c Chunk) IOAlign() uint32 { return SliceUint32LE(c[chunkIOAlign:]) }
 
+// Optimal IO width for this chunk
+func (c Chunk) IOWidth() uint32 { return SliceUint32LE(c[chunkIOWidth:]) }
+
+// Minimal IO size for this chunk
+func (c Chunk) SectorSize() uint32 { return SliceUint32LE(c[chunkSectorSize:]) }
+
+// 2^16 stripes is quite a lot, a second limit is the size of a single
+// item in the btree
+func (c Chunk) NumStripes() uint16 { return SliceUint16LE(c[chunkNumStripes:]) }
+
+// Sub stripes only matter for raid10
+func (c Chunk) SubStripes() uint16 { return SliceUint16LE(c[chunkSubStripes:]) }
+func (c Chunk) Stripes() []Stripe {
 	// Do not limit the number of stripes we allocated here. Worst case is
 	// 64k stripes.
-	i.Stripes = make([]Stripe, i.NumStripes)
-	for s := 0; s < int(i.NumStripes); s++ {
-		i.Stripes[s].Parse(b)
+	s := make([]Stripe, c.NumStripes())
+	for i := 0; i < len(s); i++ {
+		s[i] = Stripe(c[i*stripeEnd:])
 	}
+	return s
 }
 
-type InodeItem struct {
+type InodeItem []byte
+
+// InodeItem offsets for parsing from byte slice
+const (
 	// NFS style generation number
-	Generation uint64
+	inodeItemGeneration = 0
 	// Transid that last touched this inode
-	Transid    uint64
-	Size       uint64
-	Nbytes     uint64
-	BlockGroup uint64
-	Nlink      uint32
-	UID        uint32
-	GID        uint32
-	Mode       uint32
-	Rdev       uint64
-	Flags      uint64
-
+	inodeItemTransID    = inodeItemGeneration + 8
+	inodeItemSize       = inodeItemTransID + 8
+	inodeItemNbytes     = inodeItemSize + 8
+	inodeItemBlockGroup = inodeItemNbytes + 8
+	inodeItemNlink      = inodeItemBlockGroup + 8
+	inodeItemUID        = inodeItemNlink + 4
+	inodeItemGID        = inodeItemUID + 4
+	inodeItemMode       = inodeItemGID + 4
+	inodeItemRdev       = inodeItemMode + 4
+	inodeItemFlags      = inodeItemRdev + 8
 	// Modification sequence number for NFS
-	Sequence uint64
-
-	// A little future expansion, for more than this we can just grow the
+	inodeItemSequence = inodeItemFlags + 8
+	// Room for future expansion, for more than this we can just grow the
 	// inode item and version it.
-	Reserved [4]uint64
-	Atime    time.Time
-	Ctime    time.Time
-	Mtime    time.Time
-	Otime    time.Time
-}
+	inodeItemReserved = inodeItemSequence + 8
+	inodeItemAtime    = inodeItemReserved + 32
+	inodeItemCtime    = inodeItemAtime + 12
+	inodeItemMtime    = inodeItemCtime + 12
+	inodeItemOtime    = inodeItemMtime + 12
+	InodeItemLen      = inodeItemOtime + 12
+)
 
-func (i *InodeItem) Parse(b *ParseBuffer) {
-	i.Generation = b.NextUint64()
-	i.Transid = b.NextUint64()
-	i.Size = b.NextUint64()
-	i.Nbytes = b.NextUint64()
-	i.BlockGroup = b.NextUint64()
-	i.Nlink = b.NextUint32()
-	i.UID = b.NextUint32()
-	i.GID = b.NextUint32()
-	i.Mode = b.NextUint32()
-	i.Rdev = b.NextUint64()
-	i.Flags = b.NextUint64()
-	i.Sequence = b.NextUint64()
-	for j, _ := range i.Reserved {
-		i.Reserved[j] = b.NextUint64()
+func (i InodeItem) Generation() uint64 { return SliceUint64LE(i[inodeItemGeneration:]) }
+func (i InodeItem) TransID() uint64    { return SliceUint64LE(i[inodeItemTransID:]) }
+func (i InodeItem) Size() uint64       { return SliceUint64LE(i[inodeItemSize:]) }
+func (i InodeItem) BlockGroup() uint64 { return SliceUint64LE(i[inodeItemBlockGroup:]) }
+func (i InodeItem) Nlink() uint32      { return SliceUint32LE(i[inodeItemNlink:]) }
+func (i InodeItem) UID() uint32        { return SliceUint32LE(i[inodeItemUID:]) }
+func (i InodeItem) GID() uint32        { return SliceUint32LE(i[inodeItemGID:]) }
+func (i InodeItem) Mode() uint32       { return SliceUint32LE(i[inodeItemMode:]) }
+func (i InodeItem) Rdev() uint64       { return SliceUint64LE(i[inodeItemRdev:]) }
+func (i InodeItem) Flags() uint64      { return SliceUint64LE(i[inodeItemFlags:]) }
+func (i InodeItem) Sequence() uint64   { return SliceUint64LE(i[inodeItemSequence:]) }
+func (i InodeItem) Reserved() [4]uint64 {
+	return [4]uint64{SliceUint64LE(i[inodeItemReserved:]),
+		SliceUint64LE(i[inodeItemReserved+8:]),
+		SliceUint64LE(i[inodeItemReserved+16:]),
+		SliceUint64LE(i[inodeItemReserved+24:]),
 	}
-	i.Atime = b.NextTime().UTC()
-	i.Ctime = b.NextTime().UTC()
-	i.Mtime = b.NextTime().UTC()
-	i.Otime = b.NextTime().UTC()
 }
+func (i InodeItem) Atime() time.Time { return SliceTimeLE(i[inodeItemAtime:]).UTC() }
+func (i InodeItem) Ctime() time.Time { return SliceTimeLE(i[inodeItemCtime:]).UTC() }
+func (i InodeItem) Mtime() time.Time { return SliceTimeLE(i[inodeItemMtime:]).UTC() }
+func (i InodeItem) Rtime() time.Time { return SliceTimeLE(i[inodeItemOtime:]).UTC() }
 
-type InodeRefItem struct {
-	Index   uint64
-	NameLen uint16
-	Name    string
-}
+type InodeRefItem []byte
 
-func (i *InodeRefItem) Parse(b *ParseBuffer) {
-	i.Index = b.NextUint64()
-	i.NameLen = b.NextUint16()
-	l := int(i.NameLen)
+// InodeRefItem offsets for parsing from byte slice
+const (
+	inodeRefItemIndex   = 0
+	inodeRefItemNameLen = inodeRefItemIndex + 8
+	inodeRefItemName    = inodeRefItemNameLen + 2
+)
+
+func (i InodeRefItem) Index() uint64   { return SliceUint64LE(i[inodeRefItemIndex:]) }
+func (i InodeRefItem) NameLen() uint16 { return SliceUint16LE(i[inodeRefItemNameLen:]) }
+func (i InodeRefItem) Name() string {
+	l := int(i.NameLen())
 	if l > 255 {
 		l = 255
 	}
-	i.Name = string(b.Next(l))
+	return string(i[inodeRefItemName : inodeRefItemName+l])
 }
 
 // Directory item type
@@ -615,35 +551,39 @@ const (
 	FtMax
 )
 
-type DirItem struct {
-	Location Key
-	TransId  uint64
-	DataLen  uint16
-	NameLen  uint16
-	Type     uint8
-	Name     string
-	Data     string
-}
+type DirItem []byte
 
-func (i *DirItem) Parse(b *ParseBuffer) {
-	i.Location.Parse(b)
-	i.TransId = b.NextUint64()
-	i.DataLen = b.NextUint16()
-	i.NameLen = b.NextUint16()
-	i.Type = b.NextUint8()
-	l := int(i.NameLen)
+// DirItem offsets for parsing from byte slice
+const (
+	dirItemLocation = 0
+	dirItemTransID  = dirItemLocation + 8 + 1 + 8
+	dirItemDataLen  = dirItemTransID + 8
+	dirItemNameLen  = dirItemDataLen + 2
+	dirItemType     = dirItemNameLen + 2
+	dirItemName     = dirItemType + 1
+)
+
+func (d DirItem) Location() Key   { return SliceKey(d[dirItemLocation:]) }
+func (d DirItem) TransID() uint64 { return SliceUint64LE(d[dirItemTransID:]) }
+func (d DirItem) DataLen() uint16 { return SliceUint16LE(d[dirItemDataLen:]) }
+func (d DirItem) NameLen() uint16 { return SliceUint16LE(d[dirItemNameLen:]) }
+func (d DirItem) Type() uint8     { return uint8(d[dirItemType]) }
+
+func (d DirItem) Name() string {
+	l := int(d.NameLen())
 	if l > 255 {
 		l = 255
 	}
-	i.Name = string(b.Next(l))
-	l = int(i.DataLen)
-	if l > DefaultBlockSize {
-		l = DefaultBlockSize
-	}
-	i.Data = string(b.Next(l))
+	return string(d[dirItemName : dirItemName+l])
 }
 
-func (i *DirItem) IsDir() bool { return i.Type == FtDir }
+func (d DirItem) Data() string {
+	o := dirItemName + d.NameLen()
+	return string(d[o : o+d.DataLen()])
+}
+
+func (d DirItem) IsDir() bool       { return d.Type() == FtDir }
+func (d DirItem) IsSubvolume() bool { return d.Location().Type == RootItemKey }
 
 const (
 	BlockGroupData = 1 << iota
@@ -659,185 +599,221 @@ const (
 	// BlockGroupReserved = AVAIL_ALLOC_BIT_SINGLE | SPACE_INFO_GLOBAL_RSV
 )
 
-type BlockGroupItem struct {
-	Used          uint64
-	ChunkObjectID uint64
-	Flags         uint64
-}
+type BlockGroupItem []byte
 
-func (i *BlockGroupItem) Parse(b *ParseBuffer) {
-	i.Used = b.NextUint64()
-	i.ChunkObjectID = b.NextUint64()
-	i.Flags = b.NextUint64()
-}
+// BlockGroupItem offsets for parsing from byte slice
+const (
+	blockGroupItemUsed          = 0
+	blockGroupItemChunkObjectID = blockGroupItemUsed + 8
+	blockGroupItemFlags         = blockGroupItemChunkObjectID + 8
+	blockGroupItemEnd           = blockGroupItemFlags + 8
+)
 
+func (i BlockGroupItem) Used() uint64          { return SliceUint64LE(i[blockGroupItemUsed:]) }
+func (i BlockGroupItem) ChunkObjectID() uint64 { return SliceUint64LE(i[blockGroupItemChunkObjectID:]) }
+func (i BlockGroupItem) Flags() uint64         { return SliceUint64LE(i[blockGroupItemFlags:]) }
+
+// File extent type
 const (
 	FileExtentInline = iota
 	FileExtentReg
 	FileExtentPreAlloc
 )
 
-type FileExtentItem struct {
-	// Transaction id that created this extent
-	Generation uint64
+type FileExtentItem []byte
 
-	// Max number of bytes to hold this extent in ram when we split a
-	// compressed extent we can't know how big each of the resulting pieces
-	// will be. So, this is an upper limit on the size of the extent in ram
-	// instead of an exact limit.
-	RAMBytes uint64
-
-	// 32 bits for the various ways we might encode the data, including
-	// compression and encryption. If any of these are set to something a
-	// given disk format doesn't understand it is treated like an incompat
-	// flag for reading and writing, but not for stat.
-	Compression   uint8
-	Encryption    uint8
-	OtherEncoding uint16 // For later use
-
-	// Are we inline data or a real extent?
-	Type uint8
-
-	// Disk space consumed by the extent, checksum blocks are included in
-	// these numbers.
-
+// FileExtentItem offsets for parsing from byte slice
+const (
+	fileExtentItemGeneration    = 0
+	fileExtentItemRAMBytes      = fileExtentItemGeneration + 8
+	fileExtentItemCompression   = fileExtentItemRAMBytes + 8
+	fileExtentItemEncryption    = fileExtentItemCompression + 1
+	fileExtentItemOtherEncoding = fileExtentItemEncryption + 1
+	fileExtentItemType          = fileExtentItemOtherEncoding + 2
 	// At this offset in the structure, the inline extent data start.
 	// The following fields are valid only if Type != FileExtentInline:
-	DiskByteNr   uint64
-	DiskNumBytes uint64
+	fileExtentItemDiskByteNr   = fileExtentItemType + 1
+	fileExtentItemDiskNumBytes = fileExtentItemDiskByteNr + 8
+	fileExtentItemOffset       = fileExtentItemDiskNumBytes + 8
+	fileExtentItemNumBytes     = fileExtentItemOffset + 8
+)
 
-	// The logical offset in file blocks (no csums) this extent record is
-	// for. This allows a file extent to point into the middle of an existing
-	// extent on disk, sharing it between two snapshots (useful if some bytes
-	// in the middle of the extent have changed.
-	Offset uint64
+// Transaction id that created this extent
+func (i FileExtentItem) Generation() uint64 { return SliceUint64LE(i[fileExtentItemGeneration:]) }
 
-	// The logical number of file blocks (no csums included). This always
-	// reflects the size uncompressed and without encoding.
-	NumBytes uint64
+// Max number of bytes to hold this extent in ram when we split a
+// compressed extent we can't know how big each of the resulting pieces
+// will be. So, this is an upper limit on the size of the extent in ram
+// instead of an exact limit.
+func (i FileExtentItem) RAMBytes() uint64 { return SliceUint64LE(i[fileExtentItemRAMBytes:]) }
 
-	// This field is only set if Type == FileExtentInline:
-	Data string
-}
+// 32 bits for the various ways we might encode the data, including
+// compression and encryption. If any of these are set to something a
+// given disk format doesn't understand it is treated like an incompat
+// flag for reading and writing, but not for stat.
+func (i FileExtentItem) Compression() uint8 { return i[fileExtentItemCompression] }
+func (i FileExtentItem) Encryption() uint8  { return i[fileExtentItemEncryption] }
 
-func (i *FileExtentItem) Parse(b *ParseBuffer) {
-	i.Generation = b.NextUint64()
-	i.RAMBytes = b.NextUint64()
-	i.Compression = b.NextUint8()
-	i.Encryption = b.NextUint8()
-	i.OtherEncoding = b.NextUint16()
-	i.Type = b.NextUint8()
-	if i.Type != FileExtentInline {
-		i.DiskByteNr = b.NextUint64()
-		i.DiskNumBytes = b.NextUint64()
-		i.Offset = b.NextUint64()
-		i.NumBytes = b.NextUint64()
-	} else {
-		l := int(i.RAMBytes)
-		if l > DefaultBlockSize {
-			l = DefaultBlockSize
-		}
-		i.Data = string(b.Next(l))
+// For later use
+func (i FileExtentItem) OtherEncoding() uint16 { return SliceUint16LE(i[fileExtentItemOtherEncoding:]) }
+
+// Are we inline data or a real extent?
+func (i FileExtentItem) Type() uint8 { return i[fileExtentItemType] }
+
+// Disk space consumed by the extent, checksum blocks are included in
+// these numbers.
+
+func (i FileExtentItem) DiskByteNr() uint64   { return SliceUint64LE(i[fileExtentItemDiskByteNr:]) }
+func (i FileExtentItem) DiskNumBytes() uint64 { return SliceUint64LE(i[fileExtentItemDiskNumBytes:]) }
+
+// The logical offset in file blocks (no csums) this extent record is
+// for. This allows a file extent to point into the middle of an existing
+// extent on disk, sharing it between two snapshots (useful if some bytes
+// in the middle of the extent have changed.
+func (i FileExtentItem) Offset() uint64 { return SliceUint64LE(i[fileExtentItemOffset:]) }
+
+// The logical number of file blocks (no csums included). This always
+// reflects the size uncompressed and without encoding.
+func (i FileExtentItem) NumBytes() uint64 { return SliceUint64LE(i[fileExtentItemNumBytes:]) }
+
+func (i FileExtentItem) IsInline() bool { return i.Type() == FileExtentInline }
+
+// The data returned is only valid if Type == FileExtentInline:
+func (i FileExtentItem) Data() string {
+	l := int(i.RAMBytes())
+	if l > DefaultBlockSize {
+		l = DefaultBlockSize
 	}
+	return string(i[fileExtentItemDiskByteNr : fileExtentItemDiskByteNr+l])
 }
 
-type CSumItem struct {
-	CSum uint8
+type CSumItem []byte
+
+// CSumItem offsets for parsing from byte slice
+const (
+	cSumItemCSum = 0
+)
+
+func (i CSumItem) CSum() CSum {
+	// TODO(cblichmann): Have recon.go figure out checksum sizes, use 4
+	//                   (CRC32) as default. Heuristic: Scan CSumItems and
+	//                   check how many padding bytes there are.
+	c := CSum{}
+	copy(c[:], i[cSumItemCSum:])
+	return c
 }
 
-func (i *CSumItem) Parse(b *ParseBuffer) {
-	i.CSum = b.NextUint8()
-	// TODO(cblichmann): Parse the actual checksums
-}
+type RootItem []byte
 
-type RootItem struct {
-	Inode        InodeItem
-	Generation   uint64
-	RootDirID    uint64
-	ByteNr       uint64
-	ByteLimit    uint64
-	BytesUsed    uint64
-	LastSnapshot uint64
-	Flags        uint64
-	Refs         uint32
-	DropProgress Key
-	DropLevel    uint8
-	Level        uint8
-
+// RootItem offsets for parsing from byte slice
+const (
+	rootItemInode        = 0
+	rootItemGeneration   = rootItemInode + InodeItemLen
+	rootItemRootDirID    = rootItemGeneration + 8
+	rootItemByteNr       = rootItemRootDirID + 8
+	rootItemByteLimit    = rootItemByteNr + 8
+	rootItemBytesUsed    = rootItemByteLimit + 8
+	rootItemLastSnapshot = rootItemBytesUsed + 8
+	rootItemFlags        = rootItemLastSnapshot + 8
+	rootItemRefs         = rootItemFlags + 8
+	rootItemDropProgress = rootItemRefs + 4
+	rootItemDropLevel    = rootItemDropProgress + 17
+	rootItemLevel        = rootItemDropLevel + 1
 	// The following fields appear after subvol_uuids+subvol_times were
 	// introduced.
+	rootItemGenerationV2 = rootItemLevel + 1
+	rootItemUUID         = rootItemGenerationV2 + 8
+	rootItemParentUUID   = rootItemUUID + uuid.UUIDSize
+	rootItemReceivedUUID = rootItemParentUUID + uuid.UUIDSize
+	rootItemCTransID     = rootItemReceivedUUID + uuid.UUIDSize
+	rootItemOTransID     = rootItemCTransID + 8
+	rootItemSTransID     = rootItemOTransID + 8
+	rootItemRTransID     = rootItemSTransID + 8
+	rootItemCtime        = rootItemRTransID + 8
+	rootItemOtime        = rootItemCtime + 12
+	rootItemStime        = rootItemOtime + 12
+	rootItemRtime        = rootItemStime + 12
+	rootItemReserved     = rootItemRtime + 12
+	RootItemLen          = rootItemReserved + 8*8
+)
 
-	// This generation number is used to test if the new fields are valid
-	// and up to date while reading the root item. Everytime the root item
-	// is written out, the "generation" field is copied into this field. If
-	// anyone ever mounted the fs with an older kernel, we will have
-	// mismatching generation values here and thus must invalidate the
-	// new fields.
-	GenerationV2 uint64
-	UUID         uuid.UUID
-	ParentUUID   uuid.UUID
-	ReceivedUUID uuid.UUID
-	CTransID     uint64 // Updated when an inode changes
-	OTransID     uint64 // Trans when created
-	STransID     uint64 // Trans when sent. Non-zero for received subvol
-	RTransID     uint64 // Trans when received. Non-zero for received subvol
-	Ctime        time.Time
-	Otime        time.Time
-	Stime        time.Time
-	Rtime        time.Time
-	Reserved     [8]uint64
-}
+func (i RootItem) Inode() InodeItem     { return InodeItem(i[rootItemInode:]) }
+func (i RootItem) Generation() uint64   { return SliceUint64LE(i[rootItemGeneration:]) }
+func (i RootItem) RootDirID() uint64    { return SliceUint64LE(i[rootItemRootDirID:]) }
+func (i RootItem) ByteNr() uint64       { return SliceUint64LE(i[rootItemByteNr:]) }
+func (i RootItem) ByteLimit() uint64    { return SliceUint64LE(i[rootItemByteLimit:]) }
+func (i RootItem) BytesUsed() uint64    { return SliceUint64LE(i[rootItemBytesUsed:]) }
+func (i RootItem) LastSnapshot() uint64 { return SliceUint64LE(i[rootItemLastSnapshot:]) }
+func (i RootItem) Flags() uint64        { return SliceUint64LE(i[rootItemFlags:]) }
+func (i RootItem) Refs() uint32         { return SliceUint32LE(i[rootItemRefs:]) }
+func (i RootItem) DropProgress() Key    { return SliceKey(i[rootItemDropProgress:]) }
+func (i RootItem) DropLevel() uint8     { return i[rootItemDropLevel] }
+func (i RootItem) Level() uint8         { return i[rootItemLevel] }
 
-func (i *RootItem) Parse(b *ParseBuffer) {
-	i.Inode.Parse(b)
-	i.Generation = b.NextUint64()
-	i.RootDirID = b.NextUint64()
-	i.ByteNr = b.NextUint64()
-	i.ByteLimit = b.NextUint64()
-	i.LastSnapshot = b.NextUint64()
-	i.Flags = b.NextUint64()
-	i.Refs = b.NextUint32()
-	i.DropProgress.Parse(b)
-	i.DropLevel = b.NextUint8()
-	i.Level = b.NextUint8()
-	i.GenerationV2 = b.NextUint64()
-	if i.Generation == i.GenerationV2 {
-		copy(i.UUID[:], b.Next(uuid.UUIDSize))
-		copy(i.ParentUUID[:], b.Next(uuid.UUIDSize))
-		copy(i.ReceivedUUID[:], b.Next(uuid.UUIDSize))
-		i.CTransID = b.NextUint64()
-		i.OTransID = b.NextUint64()
-		i.STransID = b.NextUint64()
-		i.RTransID = b.NextUint64()
-		i.Ctime = b.NextTime().UTC()
-		i.Otime = b.NextTime().UTC()
-		i.Stime = b.NextTime().UTC()
-		i.Rtime = b.NextTime().UTC()
-		for j := range i.Reserved {
-			i.Reserved[j] = b.NextUint64()
-		}
+// This generation number is used to test if the new fields are valid
+// and up to date while reading the root item. Everytime the root item
+// is written out, the "generation" field is copied into this field. If
+// anyone ever mounted the fs with an older kernel, we will have
+// mismatching generation values here and thus must invalidate the
+// new fields.
+func (i RootItem) GenerationV2() uint64    { return SliceUint64LE(i[rootItemGenerationV2:]) }
+func (i RootItem) UUID() uuid.UUID         { return SliceUUID(i[rootItemUUID:]) }
+func (i RootItem) ParentUUID() uuid.UUID   { return SliceUUID(i[rootItemParentUUID:]) }
+func (i RootItem) ReceivedUUID() uuid.UUID { return SliceUUID(i[rootItemReceivedUUID:]) }
+
+// Updated when an inode changes
+func (i RootItem) CTransID() uint64 { return SliceUint64LE(i[rootItemCTransID:]) }
+
+// Trans when created
+func (i RootItem) OTransID() uint64 { return SliceUint64LE(i[rootItemOTransID:]) }
+
+// Trans when sent. Non-zero for received subvol
+func (i RootItem) STransID() uint64 { return SliceUint64LE(i[rootItemSTransID:]) }
+
+// Trans when received. Non-zero for received subvol
+func (i RootItem) RTransID() uint64 { return SliceUint64LE(i[rootItemRTransID:]) }
+func (i RootItem) Ctime() time.Time { return SliceTimeLE(i[rootItemCtime:]).UTC() }
+func (i RootItem) Otime() time.Time { return SliceTimeLE(i[rootItemOtime:]).UTC() }
+func (i RootItem) Stime() time.Time { return SliceTimeLE(i[rootItemStime:]).UTC() }
+func (i RootItem) Rtime() time.Time { return SliceTimeLE(i[rootItemRtime:]).UTC() }
+func (i RootItem) Reserved() [8]uint64 {
+	return [8]uint64{SliceUint64LE(i[rootItemReserved:]),
+		SliceUint64LE(i[rootItemReserved+8:]),
+		SliceUint64LE(i[rootItemReserved+16:]),
+		SliceUint64LE(i[rootItemReserved+24:]),
+		SliceUint64LE(i[rootItemReserved+32:]),
+		SliceUint64LE(i[rootItemReserved+40:]),
+		SliceUint64LE(i[rootItemReserved+48:]),
+		SliceUint64LE(i[rootItemReserved+56:]),
 	}
 }
 
-// This is used for both forward and backward root refs
-type RootRef struct {
-	DirID    uint64
-	Sequence uint64
-	NameLen  uint16
-	Name     string
-}
+func (i RootItem) IsGenerationV2() bool { return i.Generation() == i.GenerationV2() }
 
-func (i *RootRef) Parse(b *ParseBuffer) {
-	i.DirID = b.NextUint64()
-	i.Sequence = b.NextUint64()
-	i.NameLen = b.NextUint16()
-	l := int(i.NameLen)
+// This is used for both forward and backward root refs
+type RootRef []byte
+
+// RootRef offsets for parsing from byte slice
+const (
+	rootRefDirID    = 0
+	rootRefSequence = rootRefDirID + 8
+	rootRefNameLen  = rootRefSequence + 8
+	rootRefName     = rootRefNameLen + 2
+)
+
+func (r RootRef) DirID() uint64    { return SliceUint64LE(r[rootRefDirID:]) }
+func (r RootRef) Sequence() uint64 { return SliceUint64LE(r[rootRefSequence:]) }
+func (r RootRef) NameLen() uint16  { return SliceUint16LE(r[rootRefNameLen:]) }
+
+func (r RootRef) Name() string {
+	l := int(r.NameLen())
 	if l > 255 {
 		l = 255
 	}
-	i.Name = string(b.Next(l))
+	return string(r[rootRefName : rootRefName+l])
 }
 
+// Extent item flags
 const (
 	ExtentFlagData = 1 << iota
 	ExtentFlagTreeBlock
@@ -845,71 +821,18 @@ const (
 
 // Items in the extent btree are used to record the objectid of the
 // owner of the block and the number of references.
-type ExtentItem struct {
-	Refs       uint64
-	Generation uint64
-	Flags      uint64
-	compatV0   bool
-}
+type ExtentItem []byte
 
-func (i *ExtentItem) Parse(b *ParseBuffer) {
-	if !i.IsCompatV0() {
-		i.Refs = b.NextUint64()
-		i.Generation = b.NextUint64()
-		i.Flags = b.NextUint64()
-	} else {
-		i.Refs = uint64(b.NextUint32())
-	}
-}
+// ExtentItem offsets for parsing from byte slice
+const (
+	extentItemRefs       = 0
+	extentItemGeneration = extentItemRefs + 8
+	extentItemFlags      = extentItemGeneration + 8
+	extentItemEnd        = extentItemFlags + 8
+)
 
-func (i *ExtentItem) IsCompatV0() bool { return i.compatV0 }
+func (i ExtentItem) Refs() uint64       { return SliceUint64LE(i[extentItemRefs:]) }
+func (i ExtentItem) Generation() uint64 { return SliceUint64LE(i[extentItemGeneration:]) }
+func (i ExtentItem) Flags() uint64      { return SliceUint64LE(i[extentItemFlags:]) }
 
-type Leaf struct {
-	Header
-	Items []Item
-}
-
-func (l *Leaf) Parse(b *ParseBuffer) {
-	if l.Header.NrItems == 0 {
-		return
-	}
-	headerEnd := uint32(b.Offset())
-	// Clamp maximum number of items to avoid running OOM in case NrItems is
-	// corrupted. 0x19 is the typical item size without item data.
-	maxItems := b.Unread() / 0x19
-	numItems := l.Header.NrItems
-	if numItems > uint32(maxItems) {
-		numItems = uint32(maxItems)
-	}
-
-	l.Items = make([]Item, numItems)
-	for i := range l.Items {
-		l.Items[i].Parse(b)
-	}
-	for i := range l.Items {
-		item := &l.Items[i]
-		o := int(headerEnd) + int(item.Offset)
-		if o >= b.Len() {
-			continue
-		}
-		b.SetOffset(o)
-		item.ParseData(b)
-	}
-}
-
-func init() {
-	fmt.Printf("") //DBG!!!
-	// Register with custom short names
-	gob.RegisterName("BlkG", &BlockGroupItem{})
-	gob.RegisterName("CSum", &CSumItem{})
-	gob.RegisterName("Chnk", &Chunk{})
-	gob.RegisterName("DExt", &DevExtent{})
-	gob.RegisterName("DevI", &DevItem{})
-	gob.RegisterName("DirI", &DirItem{})
-	gob.RegisterName("ExtI", &ExtentItem{})
-	gob.RegisterName("FExt", &FileExtentItem{})
-	gob.RegisterName("InoR", &InodeRefItem{})
-	gob.RegisterName("Inod", &InodeItem{})
-	gob.RegisterName("Root", &RootItem{})
-	gob.RegisterName("RtRf", &RootRef{})
-}
+func (i ExtentItem) IsCompatV0() bool { return len(i) < 8+8+8 }

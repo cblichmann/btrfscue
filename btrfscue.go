@@ -82,7 +82,7 @@ func reportError(err error) {
 	}
 }
 
-// Prints more GNU-looking usage text.
+// printUsage Prints more GNU-looking usage text.
 func printUsage() {
 	fmt.Printf("Usage: %s COMMAND [OPTION]...\n"+
 		"Recover data from damaged BTRFS filesystems.\n\n"+

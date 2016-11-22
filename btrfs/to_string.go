@@ -33,51 +33,51 @@ import (
 
 func ObjectIDString(id uint64) string {
 	switch id {
-	case RootTreeObjectId:
+	case RootTreeObjectID:
 		return "ROOT_TREE"
-	case ExtentTreeObjectId:
+	case ExtentTreeObjectID:
 		return "EXTENT_TREE"
-	case ChunkTreeObjectId:
+	case ChunkTreeObjectID:
 		return "CHUNK_TREE"
-	case DevTreeObjectId:
+	case DevTreeObjectID:
 		return "DEV_TREE"
-	case FSTreeObjectId:
+	case FSTreeObjectID:
 		return "FS_TREE"
-	case RootTreeDirObjectId:
+	case RootTreeDirObjectID:
 		return "ROOT_TREE_DIR"
-	case CSumTreeObjectId:
+	case CSumTreeObjectID:
 		return "CSUM_TREE"
-	case QuotaTreeObjectId:
+	case QuotaTreeObjectID:
 		return "QUOTA_TREE"
-	case UuidTreeObjectId:
+	case UuidTreeObjectID:
 		return "UUID"
-	case FreeSpaceTreeObjectId:
+	case FreeSpaceTreeObjectID:
 		return "FREES_SPACE_TREE"
-	case DevStatsObjectId:
+	case DevStatsObjectID:
 		return "DEV_STATS"
-	case BalanceObjectId:
+	case BalanceObjectID:
 		return "BALANCE"
-	case OrphanObjectId:
+	case OrphanObjectID:
 		return "ORPHAN"
-	case TreeLogObjectId:
+	case TreeLogObjectID:
 		return "TREE_LOG"
-	case TreeLogFixupObjectId:
+	case TreeLogFixupObjectID:
 		return "TREE_LOG_FIXUP"
-	case TreeRelocObjectId:
+	case TreeRelocObjectID:
 		return "TREE_RELOC"
-	case DataRelocTreeObjectId:
+	case DataRelocTreeObjectID:
 		return "DATA_RELOC_TREE"
-	case ExtentCSumObjectId:
+	case ExtentCSumObjectID:
 		return "EXTENT_CSUM"
-	case FreeSpaceObjectId:
+	case FreeSpaceObjectID:
 		return "FREE_SPACE"
-	case FreeInoObjectId:
+	case FreeInoObjectID:
 		return "FREE_INO"
-	case MultipleObjectIds:
-		return "MULTIPLES"
-	case FirstFreeObjectId:
+	case MultipleObjectIDs:
+		return "MULTIPLE"
+	case FirstFreeObjectID:
 		return "FIRST_FREE"
-	case LastFreeObjectId:
+	case LastFreeObjectID:
 		return "LAST_FREE"
 	default:
 		return fmt.Sprint(id)
@@ -166,6 +166,7 @@ func KeyTypeString(t uint8) string {
 }
 
 func (k Key) String() string {
-	return fmt.Sprintf("key (%s %s %d=%#[3]x)", ObjectIDString(k.ObjectID),
-		KeyTypeString(k.Type), k.Offset)
+	// %d=%#[3]x
+	return fmt.Sprintf("key (%s %s %d)", ObjectIDString(k.ObjectID),
+		KeyTypeString(k.Type), int64(k.Offset))
 }

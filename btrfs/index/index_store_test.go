@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
+package index // import "blichmann.eu/code/btrfscue/btrfs/index"
 
 import (
 	"math/rand"

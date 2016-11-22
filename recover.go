@@ -2,7 +2,7 @@
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to provide a FS index metadata over IPC
+ * Sub-command to restore data
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -30,13 +30,7 @@ package main
 import (
 	"flag"
 
-	"context"
-	"net/rpc"
-	"os"
-	"os/exec"
-	"time"
-
-	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/subcommand"
 )
 
@@ -50,63 +44,45 @@ func (c *recoverCommand) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (c *recoverCommand) Run([]string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, os.Args[0], "--verbose", "--metadata", *metadata, "serve")
-	defer cancel()
-	reportError(cmd.Start())
-
-	time.Sleep(5 * time.Second)
-
-	client, err := rpc.DialHTTP("tcp", "[::1]:7077")
-	reportError(err)
-
-	{
-		args := &RangeArgs{btrfs.KeyFirst(btrfs.ExtentDataKey, 264), btrfs.KeyLast(btrfs.ExtentDataKey, 264)}
-		var reply RangeReply
-		reportError(client.Call("MetadataService.Range", args, &reply))
-		verbosef("%d %d\n", reply.Low, reply.High)
-	}
-
-	{
-		args := new(struct{})
-		var reply bool
-		reportError(client.Call("MetadataService.Quit", args, &reply))
-		return
-	}
-
 	if len(*metadata) == 0 {
 		fatalf("missing metadata option\n")
 	}
 
-	m, err := os.Open(*metadata)
+	ix, err := index.OpenReadOnly(*metadata)
 	reportError(err)
-	defer m.Close()
+	defer ix.Close()
 
-	fs := btrfs.NewIndex()
-	reportError(ReadIndex(m, &fs))
-
-	inode := uint64(264) // src.zip
-	ii := fs.InodeItem(fs.FindInodeItem(inode))
-	verbosef("file size: %d\n", ii.Size)
-
-	lo := uint64(0)
-	for i, end := fs.Range(
-		btrfs.KeyFirst(btrfs.ExtentDataKey, inode),
-		btrfs.KeyLast(btrfs.ExtentDataKey, inode)); i < end; i++ {
-		fe := fs.Item(i).Data.(*btrfs.FileExtentItem)
-		lo = fe.DiskByteNr
-		verbosef("file extent: %s %d %d %d %d\n", fs.Key(i),
-			lo, fe.DiskNumBytes, fe.NumBytes, fe.Offset)
-		_, of := fs.Physical(lo)
-		verbosef("%d\n", of)
+	for r, v := ix.Subvolumes(); r.HasNext(); v = r.Next() {
+		//verbosef("ID %d gen %d cgen %d top level - parent_uuid %s received_uuid %s uuid %s\n",
+		//	r.Key().ObjectID, v.OTransID(), v.Generation(), v.ParentUUID(), v.ReceivedUUID(), v.UUID())
+		verbosef("	item %s itemoff %d itemsize %d\n", r.Key(), r.Item().Offset(), r.Item().Size())
+		verbosef("		root data bytenr %d level %d dirid %d refs %d gen %d lastsnap %d\n",
+			v.ByteNr(), v.Level(), v.RootDirID(), v.Refs(), v.Generation(), v.LastSnapshot())
 	}
 
-	for i, end := fs.Range(
-		btrfs.KeyFirst(btrfs.ChunkItemKey),
-		btrfs.KeyLast(btrfs.ChunkItemKey)); i < end; i++ {
-		c := fs.Chunk(i)
-		verbosef("%s %d 0x%x\n", fs.Key(i), c.Length, c.Stripes[0].Offset)
-	}
+	return
+	//inode := uint64(264) // src.zip
+	//ii := ix.InodeItem(ix.FindInodeItem(inode))
+	//verbosef("file size: %d\n", ii.Size)
+
+	//lo := uint64(0)
+	//for i, end := ix.Range(
+	//	btrfs.KF(btrfs.ExtentDataKey, inode),
+	//	btrfs.KL(btrfs.ExtentDataKey, inode)); i < end; i++ {
+	//	fe := &btrfs.FileExtentItem{} //ix.Item(i).Data.(*btrfs.FileExtentItem)
+	//	lo = fe.DiskByteNr
+	//	verbosef("file extent: %s %d %d %d %d\n", ix.Key(i),
+	//		lo, fe.DiskNumBytes, fe.NumBytes, fe.Offset)
+	//	_, of := ix.Physical(lo)
+	//	verbosef("%d\n", of)
+	//}
+
+	//for i, end := ix.Range(
+	//	btrfs.KF(btrfs.ChunkItemKey),
+	//	btrfs.KL(btrfs.ChunkItemKey)); i < end; i++ {
+	//	c := ix.Chunk(i)
+	//	verbosef("%s %d 0x%x\n", ix.Key(i), c.Length, c.Stripes[0].Offset)
+	//}
 }
 
 func init() {

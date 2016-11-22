@@ -4,7 +4,7 @@
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to provide and mount a "rescue fs"
+ * Rescue FS API
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,43 +27,37 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
 
 import (
-	"flag"
+	"io"
+
+	"github.com/hanwen/go-fuse/fuse"
+	"github.com/hanwen/go-fuse/fuse/nodefs"
 
 	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/rescuefs"
-	"blichmann.eu/code/btrfscue/subcommand"
 )
 
-type mountCommand struct {
+type rescueFS struct {
+	metadata string
+	ix       *index.Index
+	device   io.ReaderAt
+
+	root   *basicNode
+	server *fuse.Server
 }
 
-func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
+func New(metadata string, ix *index.Index, device io.ReaderAt) rescueFS {
+	r := rescueFS{metadata: metadata, ix: ix, device: device}
+	r.root = r.newNode()
+	return r
 }
 
-func (c *mountCommand) Run(args []string) {
-	if len(args) == 0 {
-		fatalf("missing mount point\n")
-	}
-	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
-	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
-	defer ix.Close()
-
-	fs := rescuefs.New(*metadata, ix, nil)
-	reportError(fs.Mount(args[0]))
-	fs.Serve()
+func (r *rescueFS) Mount(on string) error {
+	var err error
+	r.server, _, err = nodefs.MountRoot(on, r.root, &nodefs.Options{})
+	return err
 }
 
-func init() {
-	subcommand.Register("mount",
-		"provide a 'rescue' filesystem backed by metadata", &mountCommand{})
-}
+func (r *rescueFS) Unmount() error { return r.server.Unmount() }
+func (r *rescueFS) Serve()         { r.server.Serve() }

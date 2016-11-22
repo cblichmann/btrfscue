@@ -1,10 +1,10 @@
-// +build linux darwin
+// +build !linux,!darwin
 
 /*
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to provide and mount a "rescue fs"
+ * Null implementation for non-Linux, non-Darwin systems
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,43 +27,25 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
 
 import (
-	"flag"
+	"errors"
+	"io"
 
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/rescuefs"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"blichmann.eu/code/btrfscue/btrfs"
 )
 
-type mountCommand struct {
+type rescueFS struct{}
+
+func New(metadata string, ix *btrfs.Index, reader io.ReaderAt) rescueFS {
+	// Do nothing
+	return rescueFS{}
 }
 
-func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
-}
+var errNotSupported = errors.New(
+	"FUSE mount is only supported on Linux and macOS")
 
-func (c *mountCommand) Run(args []string) {
-	if len(args) == 0 {
-		fatalf("missing mount point\n")
-	}
-	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
-	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
-	defer ix.Close()
-
-	fs := rescuefs.New(*metadata, ix, nil)
-	reportError(fs.Mount(args[0]))
-	fs.Serve()
-}
-
-func init() {
-	subcommand.Register("mount",
-		"provide a 'rescue' filesystem backed by metadata", &mountCommand{})
-}
+func (r *rescueFS) Mount(on string) error { return errNotSupported }
+func (r *rescueFS) Unmount() error        { return nil }
+func (r *rescueFS) Serve() error          { return errNotSupported }

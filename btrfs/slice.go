@@ -1,10 +1,8 @@
-// +build linux darwin
-
 /*
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to provide and mount a "rescue fs"
+ * Utility functions for dealing with byte slices
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,43 +25,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
-	"flag"
+	"encoding/binary"
+	"time"
 
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/rescuefs"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"blichmann.eu/code/btrfscue/uuid"
 )
 
-type mountCommand struct {
+func SliceUint16LE(b []byte) uint16 { return binary.LittleEndian.Uint16(b[:2]) }
+func SliceUint32LE(b []byte) uint32 { return binary.LittleEndian.Uint32(b[:4]) }
+func SliceUint64LE(b []byte) uint64 { return binary.LittleEndian.Uint64(b[:8]) }
+
+func SliceUUID(b []byte) uuid.UUID {
+	u := uuid.UUID{}
+	copy(u[:], b[:uuid.UUIDSize])
+	return u
 }
 
-func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
+func SliceKey(b []byte) Key {
+	return Key{SliceUint64LE(b), uint8(b[8]), SliceUint64LE(b[9:])}
 }
 
-func (c *mountCommand) Run(args []string) {
-	if len(args) == 0 {
-		fatalf("missing mount point\n")
-	}
-	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
-	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
-	defer ix.Close()
-
-	fs := rescuefs.New(*metadata, ix, nil)
-	reportError(fs.Mount(args[0]))
-	fs.Serve()
-}
-
-func init() {
-	subcommand.Register("mount",
-		"provide a 'rescue' filesystem backed by metadata", &mountCommand{})
+func SliceTimeLE(b []byte) time.Time {
+	return time.Unix(int64(SliceUint64LE(b)), int64(SliceUint32LE(b[8:])))
 }

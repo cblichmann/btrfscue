@@ -2,6 +2,8 @@
 bin/
 pkg/
 src/
+# IDE files
+.vscode/
 # Editor swap files
 .*.sw[op]
 # Test image

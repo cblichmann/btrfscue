@@ -37,6 +37,7 @@ import (
 	"text/tabwriter"
 
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/subcommand"
 )
 
@@ -75,24 +76,24 @@ func inodeModeString(mode uint32) string {
 	return FilePerms[u:u+3] + FilePerms[g:g+3] + FilePerms[o:o+3]
 }
 
-func listDirItem(w io.Writer, fs *btrfs.Index, di *btrfs.DirItem, showInode bool) {
-	inode := di.Location.ObjectID
-	if showInode {
-		fmt.Fprintf(w, "%d\t", di.Location.ObjectID)
-	}
-	fmt.Fprintf(w, dirItemTypeString(di.Type))
-	if i := fs.FindInodeItem(inode); i >= fs.Len() {
-		fmt.Fprintf(w, "?????????\t?\t?\t?\t??????\t?????")
-	} else {
-		ii := fs.InodeItem(i)
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d", inodeModeString(ii.Mode),
-			ii.Nlink, ii.UID, ii.GID, ii.Size)
-	}
+func listDirItem(w io.Writer, ix *index.Index, di btrfs.DirItem, showInode bool) {
+	//inode := di.Location().ObjectID
+	//if showInode {
+	//	fmt.Fprintf(w, "%d\t", di.Location().ObjectID)
+	//}
+	//fmt.Fprintf(w, dirItemTypeString(di.Type()))
+	//if i := ix.FindInodeItem(inode); i >= ix.Len() {
+	//	fmt.Fprintf(w, "?????????\t?\t?\t?\t??????\t?????")
+	//} else {
+	//	ii := ix.InodeItem(i)
+	//	fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d", inodeModeString(ii.Mode()),
+	//		ii.Nlink(), ii.UID(), ii.GID(), ii.Size())
+	//}
 
-	fmt.Fprintf(w, "\t%s\n", di.Name)
+	fmt.Fprintf(w, "\t%s\t%s\n", di.Name(), di.IsDir())
 }
 
-type dirItemSlice []*btrfs.DirItem
+type dirItemSlice []btrfs.DirItem
 
 func (a dirItemSlice) Len() int { return len(a) }
 func (a dirItemSlice) Less(i, j int) bool {
@@ -102,22 +103,21 @@ func (a dirItemSlice) Less(i, j int) bool {
 	if a[i].IsDir() && !a[j].IsDir() {
 		return false
 	}
-	return a[i].Name < a[j].Name
+	return a[i].Name() < a[j].Name()
 }
 func (a dirItemSlice) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a dirItemSlice) Sort()         { sort.Sort(a) }
 
-func listDirectory(w io.Writer, fs *btrfs.Index, dirID uint64, recursive,
-	showInode bool) {
+func listDirectory(w io.Writer, ix *index.Index, owner, dirID uint64,
+	recursive, showInode bool) {
 	dis := dirItemSlice{}
-	for i, end := fs.Range(btrfs.KeyFirst(btrfs.DirIndexKey, dirID),
-		btrfs.KeyLast(btrfs.DirIndexKey, dirID)); i < end; i++ {
-		dis = append(dis, fs.DirItem(i))
+	for r, v := ix.DirItems(owner, dirID); r.HasNext(); v = r.Next() {
+		dis = append(dis, v)
 	}
 	sort.Sort(dis)
 	todo := dirItemSlice{}
 	for _, di := range dis {
-		listDirItem(w, fs, di, showInode)
+		listDirItem(w, ix, di, showInode)
 		if recursive && di.IsDir() {
 			todo = append(todo, di)
 		}
@@ -125,7 +125,7 @@ func listDirectory(w io.Writer, fs *btrfs.Index, dirID uint64, recursive,
 
 	for _, di := range todo {
 		fmt.Fprintf(w, "%s:\n", di.Name)
-		listDirectory(w, fs, di.Location.ObjectID, true, showInode)
+		listDirectory(w, ix, owner, di.Location().ObjectID, true, showInode)
 	}
 }
 
@@ -149,43 +149,38 @@ func (c *lsCommand) Run(args []string) {
 		fatalf("missing metadata option\n")
 	}
 
-	m, err := os.Open(*metadata)
+	ix, err := index.OpenReadOnly(*metadata)
 	reportError(err)
-	defer m.Close()
+	defer ix.Close()
 
-	fs := btrfs.NewIndex()
-	reportError(ReadIndex(m, &fs))
-
-	dirID := uint64(btrfs.FirstFreeObjectId)
+	owner := uint64(btrfs.FSTreeObjectID)
+	dirID := uint64(btrfs.FirstFreeObjectID)
 
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
-	var todo []uint64
+	type Todo struct{ owner, dirID uint64 }
+	var todo []Todo
 	for _, p := range args {
 		p = path.Clean(p)
 		if p == "/" {
-			todo = append(todo, dirID)
+			todo = append(todo, Todo{owner, dirID})
 			continue
 		}
 
-		var i int
-		if i = fs.FindDirItem(dirID, p); i >= fs.Len() {
+		if di := ix.FindDirItemForPath(owner, p); di == nil {
 			warnf("cannot lookup '%s': No such file or directory\n", p)
 			continue
-		}
-
-		di := fs.DirItem(i)
-		if di.IsDir() {
-			listDirItem(w, &fs, di, c.inode)
+		} else if di.IsDir() {
+			listDirItem(w, ix, di, c.inode)
 			continue
+		} else {
+			todo = append(todo, Todo{owner, di.Location().ObjectID})
 		}
-
-		todo = append(todo, di.Location.ObjectID)
 	}
 	w.Flush()
 
 	w = tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
-	for _, i := range todo {
-		listDirectory(w, &fs, i, c.recursive, c.inode)
+	for _, t := range todo {
+		listDirectory(w, ix, t.owner, t.dirID, c.recursive, c.inode)
 	}
 	w.Flush()
 }

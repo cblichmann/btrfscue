@@ -8,7 +8,7 @@ filesystem to a mountable state after a power failure or system crash. More
 recently, this situation has somewhat improved with the `btrfs restore`
 command. Unlike this official tool, btrfscue is designed to be able to restore
 data from disk images that were obtained from faulty storage devices or if all
-superblocks were overwritten inadvertedly.
+superblocks were overwritten inadvertently.
 
 Being a recovery tool, btrfscue works best on disk images and writes recovered
 data to a directory. It can thus be used to convert BTRFS filesystems to any

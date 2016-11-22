@@ -28,16 +28,18 @@
 package main
 
 import (
-	"encoding/gob"
 	"flag"
 	"io"
 	"os"
 
-	"gopkg.in/cheggaaa/pb.v1"
+	_ "gopkg.in/cheggaaa/pb.v1"
 
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
+
+	"fmt" //DBG!!!
 )
 
 type reconCommand struct {
@@ -50,36 +52,6 @@ func (c *reconCommand) DefineFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.append, "append", false, "append to metadata file")
 }
 
-// WriteIndex writes the filesystem metadata index to the specified Writer.
-// It uses the Gob enconding to write out the actual elements.
-func WriteIndex(w io.Writer, fs *btrfs.Index) error {
-	enc := gob.NewEncoder(w)
-	for i := 0; i < fs.Len(); i++ {
-		if err := enc.Encode(fs.Item(i)); err != nil {
-			fatalf("%s\n", err)
-			return err
-		}
-	}
-	return nil
-}
-
-// ReadIndex reads a Gob encoded filesystem metadata index from a Reader.
-func ReadIndex(r io.Reader, fs *btrfs.Index) error {
-	dec := gob.NewDecoder(r)
-	for {
-		item := &btrfs.Item{}
-		if err := dec.Decode(&item); err == nil {
-			fs.BatchInsert(item)
-		} else if err != io.EOF {
-			return err
-		} else {
-			break
-		}
-	}
-	fs.Fix()
-	return nil
-}
-
 func (c *reconCommand) Run(args []string) {
 	if len(args) == 0 {
 		fatalf("missing device file\n")
@@ -90,35 +62,34 @@ func (c *reconCommand) Run(args []string) {
 	if len(*metadata) == 0 {
 		fatalf("missing metadata option\n")
 	}
+	if c.id.IsZero() {
+		fatalf("missing id option\n")
+	}
 
 	filename := args[0]
 	f, err := os.Open(filename)
 	reportError(err)
 	defer f.Close()
 
-	mode := os.O_RDWR | os.O_CREATE
-	if !c.append {
-		mode |= os.O_TRUNC
-	}
-	m, err := os.OpenFile(*metadata, mode, 0666)
-	reportError(err)
-	defer m.Close()
-
 	bs := uint64(*blockSize)
 
 	devSize, err := CheckedBtrfsDeviceSize(f, bs)
-	devSize = devSize - (devSize % bs)
 	reportError(err)
+	devSize = devSize - (devSize % bs)
 
 	buf := make([]byte, bs)
-	b := btrfs.NewParseBuffer(buf)
-	l := btrfs.Leaf{}
 
-	fs := btrfs.NewIndex()
+	ix, err := index.Open(*metadata, 0644, &index.IndexOptions{
+		BlockSize:  uint(bs),
+		FSID:       c.id,
+		Generation: ^uint64(0),
+	})
+	reportError(err)
+	defer ix.Close()
 
-	bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
-	bar.Start()
-	defer bar.Finish()
+	//bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
+	//bar.Start()
+	//defer bar.Finish()
 
 	// Start right after the first superblock
 	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
@@ -129,44 +100,34 @@ func (c *reconCommand) Run(args []string) {
 				break
 			}
 		}
-		bar.Set64(int64(off))
-		b.Rewind()
-		l.Header.Parse(b)
+		//bar.Set64(int64(off))
+		l := btrfs.Leaf(buf)
+		h := l.Header()
+
 		// Skip this header if it has the wrong FSID or is empty.
-		if l.FSID != c.id || l.NrItems == 0 {
+		if h.FSID() != c.id || h.NrItems() == 0 {
 			continue
 		}
-		// Also skip all non-leaves (although they should never be stored on
-		// disk).
-		if !l.IsLeaf() {
-			// TODO(cblichmann): Find out why this sometimes happens
-			//warnf("found non-leaf at offset %d, level %d\n", offset, l.Level)
+		// Also skip all non-leaves (= nodes)
+		if !h.IsLeaf() {
+			//warnf("found non-leaf %d at offset %d, level %d\n", h.ByteNr(),
+			//	off, h.Level())
 			continue
 		}
-		if l.Header.ByteNr != off {
-			// TODO(cblichmann): Are these backup leaves?
-			//warnf("expected leaf offset %d, got %d\n", offset,
-			//	l.Header.ByteNr)
-		}
-		// Given he := uint32(b.Offset()), after the following call to
-		// Parse(), the free space of a leaf is between offsets
-		// [ he, l.Items[Len(l.Items) - 1].Offset ).
-		l.Parse(b)
-		for i := range l.Items {
-			//fs.Insert(&l.Items[i])
-			fs.BatchInsert(&l.Items[i])
+		// The free space of a leaf is between offsets
+		// [ btrfs.HeaderSize, l.Items(l.Len() - 1).Offset() ).
+		for i := 0; i < l.Len(); i++ {
+			reportError(ix.InsertItem(l.Key(i), h, l.Item(i), l.Data(i)))
+			//fmt.Println(h.Owner(), l.Key(i), h.Generation())
 		}
 	}
-	fs.Fix()
-
-	// TODO(cblichmann): Add callback to allow to display progress.
-	reportError(WriteIndex(m, &fs))
-	//for i := 0; i < fs.Len(); i++ {
-	//	verbosef("%s\n", fs.Key(i))
-	//}
+	reportError(ix.Commit())
+	//bar.Set64(int64(devSize))
+	ix.Experimental()
 }
 
 func init() {
+	fmt.Printf("") //DBG!!!
 	subcommand.Register("recon", "gather metadata for later use",
 		&reconCommand{})
 }

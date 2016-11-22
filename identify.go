@@ -32,7 +32,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"os"
 	"sort"
@@ -40,6 +39,7 @@ import (
 	"time"
 
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/coding"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
 )
@@ -74,29 +74,12 @@ func ReadBlockAt(r io.ReaderAt, block []byte, offset, blockSize uint64) error {
 	return err
 }
 
-func ShannonEntropy(b []byte) float64 {
-	hist := make(map[byte]uint)
-	for _, v := range b {
-		hist[v]++
-	}
-	p := make(map[byte]float64)
-	l := float64(len(b))
-	for v, c := range hist {
-		p[v] = float64(c) / l
-	}
-	e := float64(0)
-	for _, v := range p {
-		e += v * math.Log2(v)
-	}
-	return -e
-}
+type uint64Slice []uint64
 
-type Uint64Slice []uint64
-
-func (a Uint64Slice) Len() int           { return len(a) }
-func (a Uint64Slice) Less(i, j int) bool { return a[i] < a[j] }
-func (a Uint64Slice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a Uint64Slice) Sort()              { sort.Sort(a) }
+func (a uint64Slice) Len() int           { return len(a) }
+func (a uint64Slice) Less(i, j int) bool { return a[i] < a[j] }
+func (a uint64Slice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a uint64Slice) Sort()              { sort.Sort(a) }
 
 type foundFSEntry struct {
 	FSID      uuid.UUID
@@ -195,15 +178,15 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 
 	// Sort samples vector to access device in one direction only
-	samples := make(Uint64Slice, 0, len(sampleSet))
+	samples := make(uint64Slice, 0, len(sampleSet))
 	for offset, _ := range sampleSet {
 		samples = append(samples, offset)
 	}
 	samples.Sort()
 
 	buf := make([]byte, bs)
-	b := btrfs.NewParseBuffer(buf)
-	h := btrfs.Header{}
+	//b := btrfs.NewParseBuffer(buf)
+	//h := btrfs.Header{}
 	ffffFSID := uuid.UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	type histEntry struct {
@@ -213,29 +196,30 @@ func (ic *identifyCommand) Run(args []string) {
 	hist := make(map[uuid.UUID]*histEntry)
 	for _, offset := range samples {
 		reportError(ReadBlockAt(f, buf, offset, bs))
-		b.Rewind()
-		h.Parse(b)
+		//b.Rewind()
+		h := btrfs.Header(buf)
 		// Only gather blocks that look like leaves
 		if !h.IsLeaf() {
 			continue
 		}
+		fsid := h.FSID()
 		// Skip blocks with zero FSID or with an FSID that consists only of
 		// 0xFF bytes
-		if h.FSID.IsZero() || h.FSID == ffffFSID {
+		if fsid.IsZero() || fsid == ffffFSID {
 			continue
 		}
-		entry, ok := hist[h.FSID]
+		entry, ok := hist[fsid]
 		if !ok {
 			entry = &histEntry{}
-			hist[h.FSID] = entry
+			hist[fsid] = entry
 		} else {
-			if h.NrItems > 0 {
-				item := btrfs.Item{}
-				item.Parse(b)
+			if h.NrItems() > 0 {
+				item := btrfs.Item(buf[btrfs.HeaderLen:])
 				// Since item headers and their data grow towards each other,
 				// the first item's offset will be the largest. Try to guess the
 				// block size from that.
-				entry.BlockSize = uint32((uint64(item.Offset) + bs/2) / bs * bs)
+				entry.BlockSize = uint32((uint64(item.Offset()) + bs/2) / bs *
+					bs)
 			}
 		}
 		entry.Count++
@@ -247,7 +231,7 @@ func (ic *identifyCommand) Run(args []string) {
 	for uuid, entry := range hist {
 		if entry.Count > *ic.minOccurrence {
 			occ = append(occ, foundFSEntry{uuid, entry.Count,
-				ShannonEntropy(uuid[:]), entry.BlockSize})
+				coding.ShannonEntropy(uuid[:]), entry.BlockSize})
 		}
 	}
 	sort.Sort(sort.Reverse(occ))
@@ -255,7 +239,7 @@ func (ic *identifyCommand) Run(args []string) {
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
 	fmt.Fprintln(w, "fsid\tcount\tentropy\tblock size")
 	for _, entry := range occ {
-		fmt.Fprintf(w, "%s\t%d\t%d\t%.6f\n", entry.FSID, entry.Count,
+		fmt.Fprintf(w, "%s\t%d\t%.6f\t%d\n", entry.FSID, entry.Count,
 			entry.Entropy, entry.BlockSize)
 	}
 	w.Flush()

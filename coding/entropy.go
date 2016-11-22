@@ -1,10 +1,8 @@
-// +build linux darwin
-
 /*
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Sub-command to provide and mount a "rescue fs"
+ * Compute Shanon entropy of byte slices
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,43 +25,25 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package coding // import "blichmann.eu/code/btrfscue/coding"
 
 import (
-	"flag"
-
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/rescuefs"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"math"
 )
 
-type mountCommand struct {
-}
-
-func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
-}
-
-func (c *mountCommand) Run(args []string) {
-	if len(args) == 0 {
-		fatalf("missing mount point\n")
+func ShannonEntropy(b []byte) float64 {
+	hist := make(map[byte]uint)
+	for _, v := range b {
+		hist[v]++
 	}
-	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
+	p := make(map[byte]float64)
+	l := float64(len(b))
+	for v, c := range hist {
+		p[v] = float64(c) / l
 	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
+	e := float64(0)
+	for _, v := range p {
+		e += v * math.Log2(v)
 	}
-
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
-	defer ix.Close()
-
-	fs := rescuefs.New(*metadata, ix, nil)
-	reportError(fs.Mount(args[0]))
-	fs.Serve()
-}
-
-func init() {
-	subcommand.Register("mount",
-		"provide a 'rescue' filesystem backed by metadata", &mountCommand{})
+	return -e
 }
