@@ -31,6 +31,9 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/rescuefs"
@@ -59,8 +62,17 @@ func (c *mountCommand) Run(args []string) {
 	defer ix.Close()
 
 	fs := rescuefs.New(*metadata, ix, nil)
-	reportError(fs.Mount(args[0]))
-	fs.Serve()
+	mountPoint := args[0]
+	reportError(fs.Mount(mountPoint))
+	verbosef("mounted rescue FS on %s\n", mountPoint)
+	go fs.Serve()
+
+	// Break and unmount on CTRL+C or TERM signal
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	_ = <-ch
+	verbosef("\ngot signal, unmounting...\n")
+	reportError(fs.Unmount())
 }
 
 func init() {
