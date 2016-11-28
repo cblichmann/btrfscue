@@ -95,8 +95,8 @@ type Index struct {
 	tx     *bolt.Tx
 	bucket *bolt.Bucket
 
-	// Bytes that are in flight in the current transaction
-	txBytes    int
+	// Number of inserts that are in flight in the current transaction
+	txNum      int
 	Generation uint64
 }
 
@@ -231,8 +231,8 @@ func (ix *Index) InsertItem(k btrfs.Key, h btrfs.Header, item,
 		tc); err != nil {
 		return err
 	}
-	ix.txBytes += l
-	if ix.txBytes > (128 << 20 /* 128 MiB */) {
+	ix.txNum++
+	if ix.txNum > 10000 {
 		return ix.Commit()
 	}
 	return nil
@@ -243,6 +243,7 @@ func (ix *Index) Commit() error {
 	if ix.tx != nil {
 		err = ix.tx.Commit()
 		ix.tx = nil
+		ix.txNum = 0
 		ix.bucket = nil
 	}
 	return err
