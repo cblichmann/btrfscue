@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.3
- * Copyright (c)2011-2016 Christian Blichmann
+ * Copyright (c)2011-2017 Christian Blichmann
  *
  * BTRFS filesystem structures - Leaf, Header and Items
  *

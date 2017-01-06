@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.3
- * Copyright (c)2011-2016 Christian Blichmann
+ * Copyright (c)2011-2017 Christian Blichmann
  *
  * Recover data from damaged BTRFS filesystems
  *
@@ -110,7 +110,7 @@ func main() {
 	}
 	if *version {
 		fmt.Printf("btrfscue %d.%d\n"+
-			"Copyright (c)2011-2016 Christian Blichmann\n"+
+			"Copyright (c)2011-2017 Christian Blichmann\n"+
 			"This software is BSD licensed, see the source for copying "+
 			"conditions.\n\n", versionMajor, versionMinor)
 		os.Exit(0)
