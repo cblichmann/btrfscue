@@ -253,7 +253,8 @@ func (ix *Index) Commit() error {
 // length. This ignores the generation number.
 // For example, to search for (256 DIR_INDEX ?) owned by the FS tree object:
 //   lowerBound(FSTreeObjectID, KF(DIR_INDEX, 256), indexKeyOffset)
-func lowerBound(c *bolt.Cursor, owner uint64, k btrfs.Key, prefix int) btrfs.Key {
+func lowerBound(c *bolt.Cursor, owner uint64, k btrfs.Key,
+	prefix int) btrfs.Key {
 	var found indexKey
 	search := newIndexKey(owner, k, 0)
 	if found, _ = c.Seek(search[:prefix]); bytes.Equal(found[:prefix],
@@ -268,25 +269,40 @@ func find(c *bolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
 	search := newIndexKey(owner, k, generation)
 	var found indexKey
 	found, v := c.Seek(search)
-	if bytes.Compare(found[:indexKeyGeneration], search[:indexKeyGeneration]) <= 0 {
+	if bytes.Compare(found[:indexKeyGeneration],
+		search[:indexKeyGeneration]) <= 0 {
 		return found, v
 	}
-	found, v = c.Prev()
-	if bytes.Equal(found[:indexKeyGeneration], search[:indexKeyGeneration]) {
+	if found, v = c.Prev(); len(found) > 0 && bytes.Equal(
+		found[:indexKeyGeneration], search[:indexKeyGeneration]) {
 		return found, v
 	}
 	return nil, nil
 }
 
-func findNext(c *bolt.Cursor, ik indexKey) (indexKey, btrfs.Item) {
+func findNextXXX(c *bolt.Cursor, ik indexKey) (indexKey, btrfs.Item) {
 	search := newIndexKey(ik.Owner(), ik.Key(), ^uint64(0))
 	var found indexKey
-	if found, _ = c.Seek(search); found == nil {
-		return nil, nil
+	if found, _ = c.Seek(search); found != nil {
+		search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
+		if found, v := c.Seek(search); bytes.Compare(found, search) <= 0 {
+			return found, v
+		}
 	}
-	search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
-	if found, v := c.Seek(search); bytes.Compare(found, search) <= 0 {
-		return found, v
+	return nil, nil
+}
+
+func findNext(c *bolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
+	search := newIndexKey(ik.Owner(), ik.Key(), ^uint64(0))
+	var found indexKey
+	if found, _ = c.Seek(search); found != nil {
+		search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
+		if found, v := c.Seek(search); bytes.Compare(found, search) <= 0 {
+			return found, v
+		} else if end != nil && bytes.Compare(found, end) <= 0 {
+			fmt.Println("!", found.Owner(), found.Key(), found.Generation(), "-", search.Owner(), search.Key(), search.Generation())
+			return found, v
+		}
 	}
 	return nil, nil
 }
@@ -308,11 +324,10 @@ func (r *Range) HasNext() bool {
 }
 
 func (r *Range) Next() []byte {
-	r.key, r.value = findNext(r.cursor, r.key)
-	if r.key == nil {
-		return nil
+	if r.key, r.value = findNext(r.cursor, r.key, nil); r.key != nil {
+		return btrfs.Item(r.value).Data()
 	}
-	return btrfs.Item(r.value).Data()
+	return nil
 }
 
 func (r *Range) Owner() uint64      { return r.key.Owner() }
@@ -322,8 +337,11 @@ func (r *Range) Item() btrfs.Item   { return r.value }
 
 // Range returns an index range [low, high) for the given keys.
 func (ix *Index) Range(owner uint64, first, last btrfs.Key) (Range, []byte) {
-	r := Range{ix: ix, end: newIndexKey(owner, last, ix.Generation)}
-	r.cursor = ix.bucket.Cursor()
+	r := Range{
+		ix:     ix,
+		cursor: ix.bucket.Cursor(),
+		end:    newIndexKey(owner, last, ix.Generation),
+	}
 	lowerFirst := lowerBound(r.cursor, owner, first, indexKeyOffset)
 	r.key, r.value = find(r.cursor, owner, lowerFirst, ix.Generation)
 	if r.key == nil {
@@ -332,8 +350,33 @@ func (ix *Index) Range(owner uint64, first, last btrfs.Key) (Range, []byte) {
 	return r, r.value.Data()
 }
 
+// RangeAll returns an index range for all items related to the key (t id ?).
 func (ix *Index) RangeAll(owner uint64, t uint8, id uint64) (Range, []byte) {
 	return ix.Range(owner, KF(uint64(t), id), KL(uint64(t), id))
+}
+
+type FullRange struct {
+	Range
+}
+
+func (r *FullRange) Next() []byte {
+	if r.key, r.value = findNext(r.cursor, r.key, r.end); r.key != nil {
+		return btrfs.Item(r.value).Data()
+	}
+	return nil
+}
+
+// FullRange returns an index range for all items in the index. This is
+// mainly useful for debugging.
+func (ix *Index) FullRange() (FullRange, []byte) {
+	r := FullRange{Range{
+		ix:     ix,
+		cursor: ix.bucket.Cursor(),
+		end:    newIndexKey(^uint64(0), KL(), ix.Generation),
+	}}
+	// No check, since open should fail if there's no data
+	r.key, r.value = r.cursor.First()
+	return r, r.value.Data()
 }
 
 // Subvolumes returns an index range containing all of the subvolumes. Note that
@@ -369,6 +412,13 @@ func (ix *Index) FindItem(owner uint64, k btrfs.Key) btrfs.Item {
 
 func (ix *Index) FindInodeItem(owner uint64, inode uint64) btrfs.InodeItem {
 	if i := ix.FindItem(owner, KF(btrfs.InodeItemKey, inode)); i != nil {
+		return i.Data()
+	}
+	return nil
+}
+
+func (ix *Index) FindExtentItem(owner uint64, id uint64) btrfs.FileExtentItem {
+	if i := ix.FindItem(owner, KF(btrfs.ExtentDataKey, id)); i != nil {
 		return i.Data()
 	}
 	return nil
@@ -426,8 +476,6 @@ func (ix *Index) FindDirItemForPath(owner uint64, path string) btrfs.DirItem {
 }
 
 func (ix *Index) Experimental() {
-	ix.ensureTx(false)
-	c := ix.bucket.Cursor()
 	var ik indexKey
 	var di btrfs.DirItem
 	var v []byte
@@ -461,6 +509,7 @@ func (ix *Index) Experimental() {
 	fmt.Println("-----------------------")
 
 	return
+	c := ix.bucket.Cursor()
 	fmt.Println("-----------------------")
 	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID), ix.Generation)
 	if ik != nil {

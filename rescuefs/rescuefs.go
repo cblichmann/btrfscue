@@ -41,14 +41,14 @@ import (
 type rescueFS struct {
 	metadata string
 	ix       *index.Index
-	device   io.ReaderAt
+	dev      io.ReaderAt
 
 	root   *basicNode
 	server *fuse.Server
 }
 
-func New(metadata string, ix *index.Index, device io.ReaderAt) rescueFS {
-	r := rescueFS{metadata: metadata, ix: ix, device: device}
+func New(metadata string, ix *index.Index, dev io.ReaderAt) rescueFS {
+	r := rescueFS{metadata: metadata, ix: ix, dev: dev}
 	r.root = r.newNode()
 	return r
 }

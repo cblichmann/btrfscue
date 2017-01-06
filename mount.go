@@ -50,8 +50,8 @@ func (c *mountCommand) Run(args []string) {
 	if len(args) == 0 {
 		fatalf("missing mount point\n")
 	}
-	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
+	if len(args) > 2 {
+		fatalf("extra operand '%s'\n", args[2])
 	}
 	if len(*metadata) == 0 {
 		fatalf("missing metadata option\n")
@@ -61,8 +61,21 @@ func (c *mountCommand) Run(args []string) {
 	reportError(err)
 	defer ix.Close()
 
-	fs := rescuefs.New(*metadata, ix, nil)
-	mountPoint := args[0]
+	mountPoint := args[len(args)-1]
+	var dev *os.File
+	defer func() {
+		if dev != nil {
+			dev.Close()
+		}
+	}()
+	if len(args) == 2 {
+		dev, err = os.Open(args[1])
+		reportError(err)
+	} else {
+		warnf("no device file given, only inline file data will be visible\n")
+	}
+
+	fs := rescuefs.New(*metadata, ix, dev)
 	reportError(fs.Mount(mountPoint))
 	verbosef("mounted rescue FS on %s\n", mountPoint)
 	go fs.Serve()
@@ -71,7 +84,7 @@ func (c *mountCommand) Run(args []string) {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	_ = <-ch
-	verbosef("\ngot signal, unmounting...\n")
+	warnf("got signal, unmounting...\n")
 	reportError(fs.Unmount())
 }
 

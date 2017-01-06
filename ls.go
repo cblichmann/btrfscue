@@ -35,6 +35,7 @@ import (
 	"path"
 	"sort"
 	"text/tabwriter"
+	"time"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
@@ -76,21 +77,26 @@ func inodeModeString(mode uint32) string {
 	return FilePerms[u:u+3] + FilePerms[g:g+3] + FilePerms[o:o+3]
 }
 
-func listDirItem(w io.Writer, ix *index.Index, di btrfs.DirItem, showInode bool) {
-	//inode := di.Location().ObjectID
-	//if showInode {
-	//	fmt.Fprintf(w, "%d\t", di.Location().ObjectID)
-	//}
-	//fmt.Fprintf(w, dirItemTypeString(di.Type()))
-	//if i := ix.FindInodeItem(inode); i >= ix.Len() {
-	//	fmt.Fprintf(w, "?????????\t?\t?\t?\t??????\t?????")
-	//} else {
-	//	ii := ix.InodeItem(i)
-	//	fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d", inodeModeString(ii.Mode()),
-	//		ii.Nlink(), ii.UID(), ii.GID(), ii.Size())
-	//}
+func shortTime(t time.Time) string {
+	return t.Format("Jan _2 15:04")
+}
 
-	fmt.Fprintf(w, "\t%s\t%s\n", di.Name(), di.IsDir())
+func listDirItem(w io.Writer, ix *index.Index, owner uint64, di btrfs.DirItem,
+	showInode bool) {
+	inode := di.Location().ObjectID
+	if showInode {
+		fmt.Fprintf(w, "%d\t", di.Location().ObjectID)
+	}
+	fmt.Fprintf(w, dirItemTypeString(di.Type()))
+	if ii := ix.FindInodeItem(owner, inode); ii == nil {
+		fmt.Fprintf(w, "?????????\t?\t?\t?\t?\t?")
+	} else {
+		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%d\t%s", inodeModeString(ii.Mode()),
+			ii.Nlink(), ii.UID(), ii.GID(), ii.Size(), shortTime(ii.Ctime()))
+	}
+
+	fmt.Fprintf(w, "\t%s\n", di.Name())
+	// TODO(cblichmann): Print symlinks
 }
 
 type dirItemSlice []btrfs.DirItem
@@ -117,7 +123,8 @@ func listDirectory(w io.Writer, ix *index.Index, owner, dirID uint64,
 	sort.Sort(dis)
 	todo := dirItemSlice{}
 	for _, di := range dis {
-		listDirItem(w, ix, di, showInode)
+		listDirItem(w, ix, owner, di, showInode)
+		// TODO(cblichmann): Subvolumes/Snapshots, add owner
 		if recursive && di.IsDir() {
 			todo = append(todo, di)
 		}
@@ -169,8 +176,8 @@ func (c *lsCommand) Run(args []string) {
 		if di := ix.FindDirItemForPath(owner, p); di == nil {
 			warnf("cannot lookup '%s': No such file or directory\n", p)
 			continue
-		} else if di.IsDir() {
-			listDirItem(w, ix, di, c.inode)
+		} else if !di.IsDir() {
+			listDirItem(w, ix, owner, di, c.inode)
 			continue
 		} else {
 			todo = append(todo, Todo{owner, di.Location().ObjectID})

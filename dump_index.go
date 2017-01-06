@@ -1,10 +1,8 @@
-// +build pprof
-
 /*
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Enables CPU profiling if build with -tags 'pprof'
+ * Sub-command to list files, directories and subvolumes/snapshots.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,37 +29,45 @@ package main
 
 import (
 	"flag"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-	"runtime"
-	"runtime/pprof"
+	"fmt"
+
+	_ "blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/subcommand"
 )
 
-var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "", "write memory profile to file")
-)
-
-func startProfiling() {
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		reportError(err)
-		reportError(pprof.StartCPUProfile(f))
-	}
-	// Allow to use http://localhost:6060/debug/pprof/, see
-	// https://blog.golang.org/profiling-go-programs on how to use it.
-	go func() { reportError(http.ListenAndServe(":6060", nil)) }()
+type dumpIndexCommand struct {
 }
 
-func stopProfiling() {
-	pprof.StopCPUProfile()
+func (c *dumpIndexCommand) DefineFlags(fs *flag.FlagSet) {
+}
 
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		defer f.Close()
-		reportError(err)
-		runtime.GC() // Update statistics
-		reportError(pprof.WriteHeapProfile(f))
+func (c *dumpIndexCommand) Run(args []string) {
+	if len(args) > 0 {
+		fatalf("extra operand: %s\n", args[0])
 	}
+	if len(*metadata) == 0 {
+		fatalf("missing metadata option\n")
+	}
+
+	ix, err := index.OpenReadOnly(*metadata)
+	reportError(err)
+	defer ix.Close()
+
+	last := ^uint64(0)
+	for r, v := ix.FullRange(); r.HasNext(); v = r.Next() {
+		if o := r.Owner(); o != last {
+			fmt.Printf("owner %d\n", o)
+			last = o
+		}
+		k := r.Key()
+		fmt.Printf("%s @ %d\n", k, r.Generation())
+		_ = v
+	}
+}
+
+func init() {
+	subcommand.Register("dump-index",
+		"for debugging, dump the index in text format",
+		&dumpIndexCommand{})
 }

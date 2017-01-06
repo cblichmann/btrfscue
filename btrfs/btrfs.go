@@ -636,6 +636,7 @@ const (
 	fileExtentItemDiskNumBytes = fileExtentItemDiskByteNr + 8
 	fileExtentItemOffset       = fileExtentItemDiskNumBytes + 8
 	fileExtentItemNumBytes     = fileExtentItemOffset + 8
+	FileExtentItemEnd          = fileExtentItemNumBytes + 8
 )
 
 // Transaction id that created this extent

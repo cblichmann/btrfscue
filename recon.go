@@ -32,14 +32,12 @@ import (
 	"io"
 	"os"
 
-	_ "gopkg.in/cheggaaa/pb.v1"
+	"gopkg.in/cheggaaa/pb.v1"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
-
-	"fmt" //DBG!!!
 )
 
 type reconCommand struct {
@@ -85,22 +83,24 @@ func (c *reconCommand) Run(args []string) {
 		Generation: ^uint64(0),
 	})
 	reportError(err)
-	defer ix.Close()
+	defer func() {
+		reportError(ix.Commit())
+		ix.Close()
+	}()
 
-	//bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
-	//bar.Start()
-	//defer bar.Finish()
+	bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
+	bar.SetMaxWidth(120)
+	bar.Start()
+	defer bar.Finish()
 
 	// Start right after the first superblock
 	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
-		if err = ReadBlockAt(f, buf, off, bs); err != nil {
-			if err != io.EOF {
-				reportError(err)
-			} else {
-				break
-			}
+		if err = ReadBlockAt(f, buf, off, bs); err == io.EOF {
+			break
+		} else if err != nil {
+			reportError(err)
 		}
-		//bar.Set64(int64(off))
+		bar.Set64(int64(off))
 		l := btrfs.Leaf(buf)
 		h := l.Header()
 
@@ -110,24 +110,23 @@ func (c *reconCommand) Run(args []string) {
 		}
 		// Also skip all non-leaves (= nodes)
 		if !h.IsLeaf() {
-			//warnf("found non-leaf %d at offset %d, level %d\n", h.ByteNr(),
-			//	off, h.Level())
+			//warnf("non-leaf %d at offset %d, level %d\n", h.ByteNr(), off,
+			//	h.Level())
 			continue
 		}
 		// The free space of a leaf is between offsets
 		// [ btrfs.HeaderSize, l.Items(l.Len() - 1).Offset() ).
 		for i := 0; i < l.Len(); i++ {
 			reportError(ix.InsertItem(l.Key(i), h, l.Item(i), l.Data(i)))
-			//fmt.Println(h.Owner(), l.Key(i), h.Generation())
 		}
 	}
-	reportError(ix.Commit())
-	//bar.Set64(int64(devSize))
+	bar.Set64(int64(devSize))
+
+	bar.Finish()
 	ix.Experimental()
 }
 
 func init() {
-	fmt.Printf("") //DBG!!!
 	subcommand.Register("recon", "gather metadata for later use",
 		&reconCommand{})
 }

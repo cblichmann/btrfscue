@@ -1,10 +1,10 @@
-// +build pprof
+// +build linux darwin
 
 /*
  * btrfscue version 0.3
  * Copyright (c)2011-2016 Christian Blichmann
  *
- * Enables CPU profiling if build with -tags 'pprof'
+ * Device extent backed file implementation
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,41 +27,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
 
 import (
-	"flag"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
-	"runtime"
-	"runtime/pprof"
+	"fmt" // DBG!!!
+	"github.com/hanwen/go-fuse/fuse/nodefs"
+
+	_ "blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfs/index"
 )
 
-var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "", "write memory profile to file")
-)
-
-func startProfiling() {
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		reportError(err)
-		reportError(pprof.StartCPUProfile(f))
-	}
-	// Allow to use http://localhost:6060/debug/pprof/, see
-	// https://blog.golang.org/profiling-go-programs on how to use it.
-	go func() { reportError(http.ListenAndServe(":6060", nil)) }()
+type extentFile struct {
+	nodefs.File
 }
 
-func stopProfiling() {
-	pprof.StopCPUProfile()
-
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		defer f.Close()
-		reportError(err)
-		runtime.GC() // Update statistics
-		reportError(pprof.WriteHeapProfile(f))
+func newExtentFile(ix *index.Index, owner, id uint64) nodefs.File {
+	r, e := ix.FileExtentItems(owner, id)
+	if !r.HasNext() {
+		return nil
 	}
+	f := &extentFile{File: nodefs.NewReadOnlyFile(nodefs.NewDefaultFile())}
+	for ; r.HasNext(); e = r.Next() {
+		fmt.Printf("%s (%d %d) (%d %d)\n", r.Key(), e.DiskByteNr(),
+			e.DiskNumBytes(), e.Offset(), e.NumBytes())
+	}
+	return f
 }

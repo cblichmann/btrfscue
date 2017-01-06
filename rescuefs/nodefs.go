@@ -109,6 +109,7 @@ type rescueNode struct {
 	ix       *index.Index
 	owner    uint64
 	ixInode  uint64
+	attr     *fuse.Attr // Cached attributes
 	dirItems map[string]btrfs.DirItem
 }
 
@@ -124,26 +125,28 @@ func newRescueNode(ix *index.Index, owner, inode uint64) *rescueNode {
 
 func (n *rescueNode) GetAttr(fi *fuse.Attr, file nodefs.File,
 	context *fuse.Context) (code fuse.Status) {
-	ii := n.ix.FindInodeItem(n.owner, n.ixInode)
-	if ii == nil {
-		fmt.Println("No data for", n.owner, n.ixInode)
-		return fuse.ENOATTR
+	if n.attr == nil {
+		ii := n.ix.FindInodeItem(n.owner, n.ixInode)
+		if ii == nil {
+			fmt.Println("No data for", n.owner, n.ixInode) //DBG!!!
+			return fuse.ENOATTR
+		}
+		n.attr = &fuse.Attr{
+			Ino:       n.ixInode,
+			Size:      ii.Size(),
+			Atime:     uint64(ii.Atime().Unix()),
+			Mtime:     uint64(ii.Mtime().Unix()),
+			Ctime:     uint64(ii.Ctime().Unix()),
+			Atimensec: uint32(ii.Atime().Nanosecond()),
+			Mtimensec: uint32(ii.Mtime().Nanosecond()),
+			Ctimensec: uint32(ii.Ctime().Nanosecond()),
+			Mode:      ii.Mode(),
+			Nlink:     ii.Nlink(),
+			Owner:     fuse.Owner{Uid: ii.UID(), Gid: ii.GID()},
+			Rdev:      uint32(ii.Rdev()),
+		}
 	}
-
-	*fi = fuse.Attr{
-		Ino:       n.ixInode,
-		Size:      ii.Size(),
-		Atime:     uint64(ii.Atime().Unix()),
-		Mtime:     uint64(ii.Mtime().Unix()),
-		Ctime:     uint64(ii.Ctime().Unix()),
-		Atimensec: uint32(ii.Atime().Nanosecond()),
-		Mtimensec: uint32(ii.Mtime().Nanosecond()),
-		Ctimensec: uint32(ii.Ctime().Nanosecond()),
-		Mode:      ii.Mode(),
-		Nlink:     ii.Nlink(),
-		Owner:     fuse.Owner{Uid: ii.UID(), Gid: ii.GID()},
-		Rdev:      uint32(ii.Rdev()),
-	}
+	*fi = *n.attr
 	return fuse.OK
 }
 
@@ -152,12 +155,6 @@ func (n *rescueNode) ensureDirItems() {
 		return
 	}
 	for r, d := n.ix.DirItems(n.owner, n.ixInode); r.HasNext(); d = r.Next() {
-		de := fuse.DirEntry{Name: d.Name()}
-		if d.IsDir() {
-			de.Mode = fuse.S_IFDIR
-		} else {
-			de.Mode = fuse.S_IFREG
-		}
 		n.dirItems[d.Name()] = d
 	}
 }
@@ -198,16 +195,15 @@ func (n *rescueNode) OpenDir(context *fuse.Context) ([]fuse.DirEntry,
 
 func (n *rescueNode) Open(flags uint32, context *fuse.Context) (
 	nodefs.File, fuse.Status) {
-	for r, e := n.ix.FileExtentItems(n.owner, n.ixInode); r.HasNext(); e = r.Next() {
-		fmt.Printf("%s (%d %d) (%d %d)\n", r.Key(), e.DiskByteNr(),
-			e.DiskNumBytes(), e.Offset(), e.NumBytes())
-		// TODO(cblichmann): HACK HACK HACK!
-		if e.IsInline() {
-			return nodefs.NewReadOnlyFile(nodefs.NewDataFile(
-				[]byte(e.Data()))), fuse.OK
-		}
+	if f := newExtentFile(n.ix, n.owner, n.ixInode); f != nil {
+		return f, fuse.OK
 	}
 	return nil, fuse.ENOENT
+	//// TODO(cblichmann): HACK HACK HACK!
+	//if e.IsInline() {
+	//	return nodefs.NewReadOnlyFile(nodefs.NewDataFile(
+	//		[]byte(e.Data()))), fuse.OK
+	//}
 }
 
 func (n *rescueNode) GetXAttr(attribute string, context *fuse.Context) (
@@ -218,7 +214,7 @@ func (n *rescueNode) GetXAttr(attribute string, context *fuse.Context) (
 			return []byte(x.Data()), fuse.OK
 		}
 	}
-	return nil, fuse.ENOENT
+	return nil, fuse.ENOATTR
 }
 
 func (n *rescueNode) ListXAttr(context *fuse.Context) ([]string, fuse.Status) {
@@ -227,4 +223,12 @@ func (n *rescueNode) ListXAttr(context *fuse.Context) ([]string, fuse.Status) {
 		attrs = append(attrs, x.Name())
 	}
 	return attrs, fuse.OK
+}
+
+func (n *rescueNode) Readlink(c *fuse.Context) ([]byte, fuse.Status) {
+	// Link data is stored in inline extent.
+	if e := n.ix.FindExtentItem(n.owner, n.ixInode); e != nil && e.IsInline() {
+		return []byte(e.Data()), fuse.OK
+	}
+	return nil, fuse.ENODATA
 }

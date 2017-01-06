@@ -38,6 +38,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"gopkg.in/cheggaaa/pb.v1"
+
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/coding"
 	"blichmann.eu/code/btrfscue/subcommand"
@@ -184,9 +186,10 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 	samples.Sort()
 
+	bar := pb.New(len(samples))
+	bar.Start()
+
 	buf := make([]byte, bs)
-	//b := btrfs.NewParseBuffer(buf)
-	//h := btrfs.Header{}
 	ffffFSID := uuid.UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	type histEntry struct {
@@ -194,9 +197,9 @@ func (ic *identifyCommand) Run(args []string) {
 		BlockSize uint32
 	}
 	hist := make(map[uuid.UUID]*histEntry)
-	for _, offset := range samples {
+	for i, offset := range samples {
+		bar.Set(i)
 		reportError(ReadBlockAt(f, buf, offset, bs))
-		//b.Rewind()
 		h := btrfs.Header(buf)
 		// Only gather blocks that look like leaves
 		if !h.IsLeaf() {
@@ -224,6 +227,7 @@ func (ic *identifyCommand) Run(args []string) {
 		}
 		entry.Count++
 	}
+	bar.Finish()
 
 	// Sort FSIDs by number of times found, skip items that occur less than
 	// minOccurrence times.
