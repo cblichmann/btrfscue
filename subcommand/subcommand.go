@@ -51,6 +51,7 @@ type CommandSet struct {
 	commands      map[string]*subCommand
 	parsedCommand Command
 	errorHandling flag.ErrorHandling
+	globalFlags   *flag.FlagSet
 	args          []string
 	output        io.Writer // nil means stderr, use out() internally
 }
@@ -85,6 +86,10 @@ func (c *CommandSet) RegisterHidden(name string, cmd Command) Command {
 	return cmd
 }
 
+func (c *CommandSet) SetGlobalFlags(fs *flag.FlagSet) {
+	c.globalFlags = fs
+}
+
 func (c *CommandSet) Parse(arguments []string) error {
 	var cmdName string
 	cmdPos := -1
@@ -111,6 +116,11 @@ func (c *CommandSet) Parse(arguments []string) error {
 		fs := flag.NewFlagSet(cmdName, c.errorHandling)
 		fs.SetOutput(c.output)
 		c.parsedCommand = parsed.cmd
+		if c.globalFlags != nil {
+			c.globalFlags.VisitAll(func(f *flag.Flag) {
+				fs.Var(f.Value, f.Name, f.Usage)
+			})
+		}
 		c.parsedCommand.DefineFlags(fs)
 		err = fs.Parse(arguments[cmdPos+1:])
 		c.args = fs.Args()
@@ -150,8 +160,6 @@ func (c *CommandSet) VisitAll(fn func(name, desc string, cmd Command)) {
 		}
 	}
 }
-
-// TODO(cblichmann): Other useful functions from the flag package.
 
 func Register(name, description string, cmd Command) Command {
 	return Commands.Register(name, description, cmd)

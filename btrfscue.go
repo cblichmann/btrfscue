@@ -122,6 +122,7 @@ func main() {
 	startProfiling()
 	defer stopProfiling()
 
+	subcommand.Commands.SetGlobalFlags(flag.CommandLine)
 	subcommand.Parse(flag.Args())
 	subcommand.Run()
 }

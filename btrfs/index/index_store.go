@@ -297,10 +297,11 @@ func findNext(c *bolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
 	var found indexKey
 	if found, _ = c.Seek(search); found != nil {
 		search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
-		if found, v := c.Seek(search); bytes.Compare(found, search) <= 0 {
+		var v btrfs.Item
+		if found, v = c.Seek(search); bytes.Compare(found, search) <= 0 {
 			return found, v
 		} else if end != nil && bytes.Compare(found, end) <= 0 {
-			fmt.Println("!", found.Owner(), found.Key(), found.Generation(), "-", search.Owner(), search.Key(), search.Generation())
+			//fmt.Println("!", found.Owner(), found.Key(), found.Generation(), "-", search.Owner(), search.Key(), search.Generation())
 			return found, v
 		}
 	}
