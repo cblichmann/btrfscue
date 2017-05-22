@@ -239,13 +239,13 @@ func (ix *Index) InsertItem(k btrfs.Key, h btrfs.Header, item,
 }
 
 func (ix *Index) Commit() error {
-	var err error
-	if ix.tx != nil {
-		err = ix.tx.Commit()
-		ix.tx = nil
-		ix.txNum = 0
-		ix.bucket = nil
+	if ix.tx == nil {
+		return nil
 	}
+	err := ix.tx.Commit()
+	ix.tx = nil
+	ix.txNum = 0
+	ix.bucket = nil
 	return err
 }
 
@@ -276,18 +276,6 @@ func find(c *bolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
 	if found, v = c.Prev(); len(found) > 0 && bytes.Equal(
 		found[:indexKeyGeneration], search[:indexKeyGeneration]) {
 		return found, v
-	}
-	return nil, nil
-}
-
-func findNextXXX(c *bolt.Cursor, ik indexKey) (indexKey, btrfs.Item) {
-	search := newIndexKey(ik.Owner(), ik.Key(), ^uint64(0))
-	var found indexKey
-	if found, _ = c.Seek(search); found != nil {
-		search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
-		if found, v := c.Seek(search); bytes.Compare(found, search) <= 0 {
-			return found, v
-		}
 	}
 	return nil, nil
 }
@@ -345,10 +333,10 @@ func (ix *Index) Range(owner uint64, first, last btrfs.Key) (Range, []byte) {
 	}
 	lowerFirst := lowerBound(r.cursor, owner, first, indexKeyOffset)
 	r.key, r.value = find(r.cursor, owner, lowerFirst, ix.Generation)
-	if r.key == nil {
-		return r, nil
+	if r.key != nil {
+		return r, r.value.Data()
 	}
-	return r, r.value.Data()
+	return r, nil
 }
 
 // RangeAll returns an index range for all items related to the key (t id ?).
