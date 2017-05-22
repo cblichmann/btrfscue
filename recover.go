@@ -31,7 +31,7 @@ import (
 	"flag"
 
 	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/subcommand"
+	_ "blichmann.eu/code/btrfscue/subcommand"
 )
 
 type recoverCommand struct {
@@ -86,6 +86,7 @@ func (c *recoverCommand) Run([]string) {
 }
 
 func init() {
-	subcommand.Register("recover",
-		"try to restore files from a damaged filesystem", &recoverCommand{})
+	// TODO(cblichmann): This command is not implemented
+	//subcommand.Register("recover",
+	//	"try to restore files from a damaged filesystem", &recoverCommand{})
 }
