@@ -2,18 +2,32 @@ btrfscue
 ========
 
 btrfscue is an advanced data recovery tool for the BTRFS filesystem. Despite
-being a state of the art filesystem, at the time when I started writing this (Q2
-2011), BTRFS did not have a stable fsck tool that is capable of restoring a
-filesystem to a mountable state after a power failure or system crash. More
-recently, this situation has somewhat improved with the `btrfs restore`
+being a state of the art filesystem, at the time when I started writing this
+(Q2 2011), BTRFS did not have a stable fsck tool that is capable of restoring
+a filesystem to a mountable state after a power failure or system crash.
+Recently, this situation has somewhat improved with the `btrfs restore`
 command. Unlike this official tool, btrfscue is designed to be able to restore
 data from disk images that were obtained from faulty storage devices or if all
 superblocks were overwritten inadvertently.
 
-Being a recovery tool, btrfscue works best on disk images and writes recovered
-data to a directory. It can thus be used to convert BTRFS filesystems to any
-other filesystem supported by the host OS. It can also recover recently
+Being a recovery tool, btrfscue works best on disk images and will write
+recovered data to a directory. It can thus be used to convert BTRFS filesystems
+to any other filesystem supported by the host OS. It will also recover recently
 deleted files and directories and aid in BTRFS filesystem forensics.
+
+
+Table of Contents
+-----------------
+
+   * [btrfscue](#btrfscue)
+      * [Development State](#development-state)
+      * [Requirements](#requirements)
+      * [Recommended Tools](#recommended-tools)
+      * [How to Build](#how-to-build)
+         * [Build using Make](#build-using-make)
+      * [Packages](#packages)
+      * [Usage](#usage)
+      * [Copyright/License](#copyrightlicense)
 
 
 Development State
@@ -28,18 +42,19 @@ This works:
   - Heuristic detection of filesystem identifiers
   - Dump meta data to file
   - Listing of files and directories in the metadata
+  - FUSE-mounting a "rescue" view of the metadata
 
 This definitely does not work:
+  - Actually restoring files bigger than the filesystem block size
   - Running on big-endian machines
-  - BTRFS RAID levels, multi-device FS
+  - BTRFS RAID levels, multi-device FS. These are planned for later.
 
 
 Requirements
 ------------
 
-  - Go 1.5 or higher
-  - SQLite3 via [go-sqlite3](https://github.com/mattn/go-sqlite3), tested with
-    3.11.1. This also need a working C compiler.
+  - Go 1.8 or higher
+  - Git version 1.7 or later
   - Optional: CDBS (to build the Debian packages)
   - Optional: GNU Make
 
@@ -61,14 +76,13 @@ General way to build from source via `go get`:
 go get blichmann.eu/code/btrfscue
 ```
 
-### Build the old-fashioned Way
+### Build using Make
 
 To build from a specific revision/branch/tag, not using `go get`:
 ```bash
 mkdir -p btrfscue && cd btrfscue
 git clone https://github.com/cblichmann/btrfscue.git .
 # Optional: checkout a specific rev./branch/tag using i.e. git checkout
-eval $(make env)
 make
 ```
 
@@ -78,8 +92,8 @@ You may want to create a symlink to the binary somewhere in your path.
 Packages
 --------
 
-At the moment, only building Debian packages is supported. Change to the
-`debian` directory and build the package by running `debuild` as usual.
+At the moment, only building Debian packages is supported. Just run `make deb`
+to build.
 
 
 Usage
@@ -113,34 +127,24 @@ Data recovery with btrfscue is divided in stages:
      ```
   3. Save metadata for later analysis. This may take a long time to finish
      as the whole image is being scanned. You need to specify the filesystem
-     to look out for by using the --id parameter with a filesystem id FSID.
+     to look for by using the --id parameter with a filesystem id FSID.
      ```
      btrfscue recon --id FSID --metadata metadata.db DISKIMAGE
      ```
   4. Inspect the metadata dump to help decide what to restore later.
      ```
      btrfscue --metadata metadata.db ls /
-     btrfscue --metadata metadata.db ls /#sub:some_subvolume/
-     btrfscue --metadata metadata.db ls /#snap:a_snapshot/
-     btrfscue --metadata metadata.db find --type f --name '*.cpp'
      ...
      ```
-  5. Restore the actual data. For example, restore all of the files,
-     directories and sub-volumes from the disk image, using the metadata.
-     The files are restored to the current directory, with sub-volumes and
-     snapshot data placed in separate sub-directories with the respective
-     filesystem entity name.
+     Alternatively, if you're on Linux or macOS, you can FUSE-mount a "rescue"
+     of the filesystem metadata:
      ```
-     btrfscue --metadata metadata.db recover DISKIMAGE /
+     btrfscue --metadata metadata.db mount MOUNTPOINT
      ```
+     Explore the metadata from another shell. Type CTRL+C to unmount.
 
-
-List syntax
------------
-
-When using the list or find command, prepend `/#sub:NAME/` or `/#snap:NAME/`
-to the path in the disk image to operate on the sub-volume or snapshot named
-NAME, respectively.
+  5. Restore the actual data. This is work-in-progress. You can use the mount
+     command to copy files that are no bigger than the filesystem block size.
 
 
 Copyright/License
