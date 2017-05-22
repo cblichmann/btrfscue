@@ -2,7 +2,7 @@
  * btrfscue version 0.3
  * Copyright (c)2011-2017 Christian Blichmann
  *
- * Sub-command to list files, directories and subvolumes/snapshots.
+ * Sub-command to dump the index contents.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

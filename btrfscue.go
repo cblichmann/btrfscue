@@ -36,11 +36,6 @@ import (
 	"blichmann.eu/code/btrfscue/subcommand"
 )
 
-const (
-	versionMajor = 0
-	versionMinor = 3
-)
-
 var (
 	// Global options
 	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
@@ -109,10 +104,10 @@ func main() {
 		os.Exit(0)
 	}
 	if *version {
-		fmt.Printf("btrfscue %d.%d\n"+
-			"Copyright (c)2011-2017 Christian Blichmann\n"+
-			"This software is BSD licensed, see the source for copying "+
-			"conditions.\n\n", versionMajor, versionMinor)
+		fmt.Printf("btrfscue 0.3\n" +
+			"Copyright (c)2011-2017 Christian Blichmann\n" +
+			"This software is BSD licensed, see the source for copying " +
+			"conditions.\n\n")
 		os.Exit(0)
 	}
 	if flag.NArg() == 0 {
