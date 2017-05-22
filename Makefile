@@ -96,7 +96,7 @@ debsource: $(source_only_tgz)
 # debuild signs the package iff DEBFULLNAME, DEBEMAIL and DEB_SIGN_KEYID are
 # set. Note that if the GPG key includes an alias, it must match the latest
 # entry in debian/changelog.
-deb: debsource $(binaries)
+deb: debsource
 	@echo "  [Debuild]   Building package"
 	@debuild
 
