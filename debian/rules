@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 #
-# btrfscue version 0.3
-# Copyright (c)2011-2016 Christian Blichmann
+# btrfscue version 0.4
+# Copyright (c)2011-2017 Christian Blichmann
 #
 # CDBS rules file for Debian packaging
 #

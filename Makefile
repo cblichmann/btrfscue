@@ -1,7 +1,7 @@
 #!/usr/bin/env make
 #
-# btrfscue version 0.3
-# Copyright (c)2015,2016 Christian Blichmann
+# btrfscue version 0.4
+# Copyright (c)2011-2017 Christian Blichmann
 #
 # Makefile for POSIX compatible systems
 #
@@ -26,7 +26,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Source Configuration
-version = 0.3
+version = 0.4
 go_package = blichmann.eu/code/btrfscue
 go_programs = btrfscue
 source_only_tgz = ../btrfscue_$(version).orig.tar.xz

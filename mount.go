@@ -1,7 +1,7 @@
 // +build linux darwin
 
 /*
- * btrfscue version 0.3
+ * btrfscue version 0.4
  * Copyright (c)2011-2017 Christian Blichmann
  *
  * Sub-command to provide and mount a "rescue fs"

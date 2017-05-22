@@ -1,5 +1,5 @@
 /*
- * btrfscue version 0.3
+ * btrfscue version 0.4
  * Copyright (c)2011-2017 Christian Blichmann
  *
  * Identify filesystems sub-command

@@ -1,7 +1,7 @@
 // +build linux darwin
 
 /*
- * btrfscue version 0.3
+ * btrfscue version 0.4
  * Copyright (c)2011-2017 Christian Blichmann
  *
  * A "rescue" FS that provides a read-only view backed by index metadata

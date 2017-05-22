@@ -150,7 +150,7 @@ Data recovery with btrfscue is divided in stages:
 Copyright/License
 -----------------
 
-btrfscue version 0.3
+btrfscue version 0.4
 Copyright (c)2011-2017 Christian Blichmann <mail@blichmann.eu>
 
 btrfscue is licensed under a two-clause BSD license, see the LICENSE file
