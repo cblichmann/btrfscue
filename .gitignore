@@ -6,5 +6,6 @@ src/
 .vscode/
 # Editor swap files
 .*.sw[op]
-# Test image
+# Development temp files
+__tmp/
 *.img
