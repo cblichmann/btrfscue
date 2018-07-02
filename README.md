@@ -81,7 +81,7 @@ go get blichmann.eu/code/btrfscue
 To build from a specific revision/branch/tag, not using `go get`:
 ```bash
 mkdir -p btrfscue && cd btrfscue
-git clone https://github.com/cblichmann/btrfscue.git .
+git clone --recurse-submodules https://github.com/cblichmann/btrfscue.git .
 # Optional: checkout a specific rev./branch/tag using i.e. git checkout
 make
 ```
