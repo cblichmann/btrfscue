@@ -1,8 +1,8 @@
 // +build !pprof
 
 /*
- * btrfscue version 0.4
- * Copyright (c)2011-2017 Christian Blichmann
+ * btrfscue version 0.5
+ * Copyright (c)2011-2018 Christian Blichmann
  *
  * Provides a stub implementation for profiling
  *
