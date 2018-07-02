@@ -4,9 +4,6 @@
 [submodule "vendor/gopkg.in/cheggaaa/pb.v1"]
 	path = vendor/gopkg.in/cheggaaa/pb.v1
 	url = https://github.com/cheggaaa/pb.git
-[submodule "vendor/github.com/boltdb/bolt"]
-	path = vendor/github.com/boltdb/bolt
-	url = https://github.com/boltdb/bolt.git
 [submodule "vendor/github.com/mattn/go-runewidth"]
 	path = vendor/github.com/mattn/go-runewidth
 	url = https://github.com/mattn/go-runewidth.git
