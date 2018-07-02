@@ -34,12 +34,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/boltdb/bolt"
-
 	"fmt" //DBG!!!
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/uuid"
+	"github.com/coreos/bbolt"
 )
 
 func init() { fmt.Printf("") } //DBG!!!
