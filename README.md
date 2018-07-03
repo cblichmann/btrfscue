@@ -1,4 +1,4 @@
-btrfscue
+btrfscue [![Build Status](https://api.travis-ci.org/cblichmann/btrfscue.svg?branch=master)](https://travis-ci.org/cblichmann/btrfscue)
 ========
 
 btrfscue is an advanced data recovery tool for the BTRFS filesystem. Despite
