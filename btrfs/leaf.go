@@ -27,9 +27,7 @@
 
 package btrfs
 
-import (
-	"blichmann.eu/code/btrfscue/uuid"
-)
+import "blichmann.eu/code/btrfscue/uuid"
 
 type Header []byte
 
@@ -120,5 +118,11 @@ func (l Leaf) Key(i int) Key {
 func (l Leaf) Data(i int) []byte {
 	item := l.Item(i)
 	o := int(HeaderLen) + int(item.Offset())
-	return l[o : o+int(item.Size())]
+	// Guard against invalid Item lengths.
+	itemLen := len(item)
+	e := o + int(item.Size())
+	if e > itemLen {
+		e = itemLen
+	}
+	return l[o:e]
 }

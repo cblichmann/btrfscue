@@ -630,7 +630,7 @@ const (
 	fileExtentItemEncryption    = fileExtentItemCompression + 1
 	fileExtentItemOtherEncoding = fileExtentItemEncryption + 1
 	fileExtentItemType          = fileExtentItemOtherEncoding + 2
-	// At this offset in the structure, the inline extent data start.
+	// At this offset in the structure, the inline extent data starts.
 	// The following fields are valid only if Type != FileExtentInline:
 	fileExtentItemDiskByteNr   = fileExtentItemType + 1
 	fileExtentItemDiskNumBytes = fileExtentItemDiskByteNr + 8

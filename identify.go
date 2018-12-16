@@ -198,7 +198,7 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 	hist := make(map[uuid.UUID]*histEntry)
 	for i, offset := range samples {
-		bar.Set(i)
+		bar.Set(i + 1)
 		reportError(ReadBlockAt(f, buf, offset, bs))
 		h := btrfs.Header(buf)
 		// Only gather blocks that look like leaves
