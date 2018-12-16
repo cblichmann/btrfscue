@@ -58,8 +58,14 @@ $(binaries): export GOPATH = $(project_go_path)
 $(binaries): $(sources)
 	@echo "  [Build]     $@"
 	@mkdir -p "$(dir $(pkg_src))"
-	@ln -sft "$(dir $(pkg_src))" "$(this_dir)"
+	@test -h "$(pkg_src)" || ln -s "$(this_dir)" "$(pkg_src)"
 	@go install -tags '$(TAGS)' $(go_package)
+
+.PHONY: test
+test: export GOPATH = $(project_go_path)
+test: $(binaries)
+	@echo "  [Test]"
+	@go test ./...
 
 $(source_only_tgz): clean
 	@echo "  [Archive]   $@"
@@ -79,6 +85,7 @@ updatesourcemeta:
 		$(sources) \
 		$(this_dir)/debian/copyright \
 		$(this_dir)/debian/rules \
+		$(this_dir)/man/*.[1-9] \
 		$(this_dir)/LICENSE \
 		$(this_dir)/Makefile \
 		$(this_dir)/README.md; \
@@ -96,7 +103,7 @@ debsource: $(source_only_tgz)
 # debuild signs the package iff DEBFULLNAME, DEBEMAIL and DEB_SIGN_KEYID are
 # set. Note that if the GPG key includes an alias, it must match the latest
 # entry in debian/changelog.
-deb: debsource
+deb: debsource $(binaries)
 	@echo "  [Debuild]   Building package"
 	@debuild
 

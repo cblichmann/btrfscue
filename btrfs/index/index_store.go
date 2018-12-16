@@ -34,11 +34,11 @@ import (
 	"os"
 	"strings"
 
-	"fmt" //DBG!!!
+	"fmt"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/uuid"
-	"github.com/coreos/bbolt"
+	"github.com/etcd-io/bbolt"
 )
 
 func init() { fmt.Printf("") } //DBG!!!
@@ -90,9 +90,9 @@ const metadataVersion = 20161109
 // a memory-mapped key-value store to quickly access FS objects.
 // When opened read/write, concurrent access to this object must be guarded.
 type Index struct {
-	db     *bolt.DB
-	tx     *bolt.Tx
-	bucket *bolt.Bucket
+	db     *bbolt.DB
+	tx     *bbolt.Tx
+	bucket *bbolt.Bucket
 
 	// Number of inserts that are in flight in the current transaction
 	txNum      int
@@ -153,7 +153,7 @@ func open(path string, m os.FileMode, o *IndexOptions) (*Index, error) {
 	}
 	ix := &Index{Generation: o.Generation}
 	var err error
-	if ix.db, err = bolt.Open(path, m, &bolt.Options{
+	if ix.db, err = bbolt.Open(path, m, &bbolt.Options{
 		ReadOnly: o.ReadOnly}); err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func open(path string, m os.FileMode, o *IndexOptions) (*Index, error) {
 }
 
 func (ix *Index) checkUpdateMetadata(o *IndexOptions) error {
-	return ix.db.Update(func(tx *bolt.Tx) error {
+	return ix.db.Update(func(tx *bbolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte("index"))
 		if err != nil {
 			return err
@@ -252,7 +252,7 @@ func (ix *Index) Commit() error {
 // length. This ignores the generation number.
 // For example, to search for (256 DIR_INDEX ?) owned by the FS tree object:
 //   lowerBound(FSTreeObjectID, KF(DIR_INDEX, 256), indexKeyOffset)
-func lowerBound(c *bolt.Cursor, owner uint64, k btrfs.Key,
+func lowerBound(c *bbolt.Cursor, owner uint64, k btrfs.Key,
 	prefix int) btrfs.Key {
 	var found indexKey
 	search := newIndexKey(owner, k, 0)
@@ -263,7 +263,7 @@ func lowerBound(c *bolt.Cursor, owner uint64, k btrfs.Key,
 	return KL()
 }
 
-func find(c *bolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
+func find(c *bbolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
 	indexKey, btrfs.Item) {
 	search := newIndexKey(owner, k, generation)
 	var found indexKey
@@ -279,7 +279,7 @@ func find(c *bolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
 	return nil, nil
 }
 
-func findNext(c *bolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
+func findNext(c *bbolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
 	search := newIndexKey(ik.Owner(), ik.Key(), ^uint64(0))
 	var found indexKey
 	if found, _ = c.Seek(search); found != nil {
@@ -300,7 +300,7 @@ func findNext(c *bolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
 // of range marker.
 type Range struct {
 	ix       *Index
-	cursor   *bolt.Cursor
+	cursor   *bbolt.Cursor
 	key, end indexKey
 	value    btrfs.Item
 }
