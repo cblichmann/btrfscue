@@ -2,8 +2,6 @@
 bin/
 pkg/
 src/
-# IDE files
-.vscode/
 # Editor swap files
 .*.sw[op]
 # Development temp files

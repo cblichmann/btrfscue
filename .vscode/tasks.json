@@ -1,0 +1,35 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "shell",
+			"command": "make",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Run tests",
+			"type": "shell",
+			"command": "make test",
+			"group": "test"
+		},
+		{
+			"label": "Clean",
+			"type": "shell",
+			"command": "make clean"
+		},
+		{
+			"label": "Clean Debian package",
+			"type": "shell",
+			"command": "make debclean"
+		},
+		{
+			"label": "Update source metdata",
+			"type": "shell",
+			"command": "make updatesourcemeta",
+		}
+	]
+}
