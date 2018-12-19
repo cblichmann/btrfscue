@@ -35,11 +35,10 @@ source_only_tgz = ../btrfscue_$(version).orig.tar.xz
 this_dir := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 bin_dir := $(this_dir)/bin
 pkg_src := $(this_dir)/src/$(go_package)
-third_party_dir := $(abspath $(this_dir)/../third_party)
 
 binaries := $(addprefix $(bin_dir)/,$(go_programs))
 sources := $(wildcard $(shell go list -f '{{.Dir}}/*.go' ./...))
-project_go_path := $(third_party_dir)/go:$(this_dir)
+GOPATH := $(this_dir)
 
 .PHONY: all
 all: $(binaries)
@@ -47,25 +46,23 @@ all: $(binaries)
 .PHONY: env
 env:
 #	# Use like this: eval $(make env)
-	@echo "export GOPATH=$(project_go_path)"
+	@echo "export GOPATH=$(GOPATH)"
 
 .PHONY: clean
 clean:
 	@echo "  [Clean]     Removing build artifacts"
 	@for i in bin pkg src; do rm -rf "$(this_dir)/$$i"; done
 
-$(binaries): export GOPATH = $(project_go_path)
 $(binaries): $(sources)
 	@echo "  [Build]     $@"
 	@mkdir -p "$(dir $(pkg_src))"
 	@test -h "$(pkg_src)" || ln -s "$(this_dir)" "$(pkg_src)"
-	@go install -tags '$(TAGS)' $(go_package)
+	@cd "$(pkg_src)" && go install -tags "$(TAGS)" $(go_package)
 
 .PHONY: test
-test: export GOPATH = $(project_go_path)
 test: $(binaries)
 	@echo "  [Test]"
-	@go test ./...
+	@cd "$(pkg_src)" && go test ./...
 
 $(source_only_tgz): clean
 	@echo "  [Archive]   $@"
