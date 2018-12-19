@@ -40,7 +40,8 @@ var (
 	// Global options
 	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
 		"filesystem block size")
-	metadata = flag.String("metadata", "", "metadata database to use")
+	metadata = flag.String("metadata", os.Getenv("BTRFSCUE_METADATA"),
+		"metadata database to use")
 
 	help    = flag.Bool("help", false, "display this help and exit")
 	verbose = flag.Bool("verbose", false, "explain what is being done")
