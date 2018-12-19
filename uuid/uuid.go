@@ -37,8 +37,18 @@ const UUIDSize = 16
 
 type UUID [UUIDSize]byte
 
+var (
+	uuidAllZero = UUID{}
+	uuidAllFs   = UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+)
+
 func (u UUID) IsZero() bool {
-	return u == UUID{}
+	return u == uuidAllZero
+}
+
+func (u UUID) IsAllFs() bool {
+	return u == uuidAllFs
 }
 
 func (u UUID) String() string {

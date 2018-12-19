@@ -190,8 +190,6 @@ func (ic *identifyCommand) Run(args []string) {
 	bar.Start()
 
 	buf := make([]byte, bs)
-	ffffFSID := uuid.UUID{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 	type histEntry struct {
 		Count     uint
 		BlockSize uint32
@@ -208,7 +206,7 @@ func (ic *identifyCommand) Run(args []string) {
 		fsid := h.FSID()
 		// Skip blocks with zero FSID or with an FSID that consists only of
 		// 0xFF bytes
-		if fsid.IsZero() || fsid == ffffFSID {
+		if fsid.IsZero() || fsid.IsAllFs() {
 			continue
 		}
 		entry, ok := hist[fsid]
