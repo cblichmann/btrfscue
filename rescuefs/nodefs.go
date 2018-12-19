@@ -195,15 +195,20 @@ func (n *rescueNode) OpenDir(context *fuse.Context) ([]fuse.DirEntry,
 
 func (n *rescueNode) Open(flags uint32, context *fuse.Context) (
 	nodefs.File, fuse.Status) {
+	// TODO(cblichmann): HACK HACK HACK!
+	r, e := n.ix.FileExtentItems(n.owner, n.ixInode)
+	if !r.HasNext() {
+		return nil, fuse.ENOENT
+	}
+	if e.IsInline() {
+		return nodefs.NewReadOnlyFile(nodefs.NewDataFile(
+			[]byte(e.Data()))), fuse.OK
+	}
+
 	if f := newExtentFile(n.ix, n.owner, n.ixInode); f != nil {
 		return f, fuse.OK
 	}
 	return nil, fuse.ENOENT
-	//// TODO(cblichmann): HACK HACK HACK!
-	//if e.IsInline() {
-	//	return nodefs.NewReadOnlyFile(nodefs.NewDataFile(
-	//		[]byte(e.Data()))), fuse.OK
-	//}
 }
 
 func (n *rescueNode) GetXAttr(attribute string, context *fuse.Context) (
