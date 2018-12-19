@@ -27,7 +27,9 @@
 
 package btrfs
 
-import "blichmann.eu/code/btrfscue/uuid"
+import (
+	"blichmann.eu/code/btrfscue/uuid"
+)
 
 type Header []byte
 
@@ -37,7 +39,7 @@ const (
 	// The following three fields must match struct SuperBlock
 	headerFSID   = headerCSum + CSumSize
 	headerByteNr = headerFSID + uuid.UUIDSize
-	headerFlags  = headerByteNr + 8
+	headerFlags  = headerByteNr + 8 // Includes 1 byte backref rev.
 	// Allowed to be different from SuperBlock from here on
 	headerChunkTreeUUID = headerFlags + 8
 	headerGeneration    = headerChunkTreeUUID + uuid.UUIDSize
@@ -117,12 +119,12 @@ func (l Leaf) Key(i int) Key {
 
 func (l Leaf) Data(i int) []byte {
 	item := l.Item(i)
-	o := int(HeaderLen) + int(item.Offset())
+	o := HeaderLen + item.Offset()
 	// Guard against invalid Item lengths.
-	itemLen := len(item)
-	e := o + int(item.Size())
-	if e > itemLen {
-		e = itemLen
+	leafLen := uint32(len(l))
+	e := o + item.Size()
+	if e > leafLen {
+		e = leafLen
 	}
 	return l[o:e]
 }
