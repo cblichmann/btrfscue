@@ -72,7 +72,7 @@ type Item []byte
 
 const (
 	itemKey    = 0
-	itemOffset = itemKey + 8 + 1 + 8
+	itemOffset = itemKey + KeyLen
 	itemSize   = itemOffset + 4
 	ItemLen    = itemSize + 4
 )

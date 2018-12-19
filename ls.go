@@ -131,7 +131,7 @@ func listDirectory(w io.Writer, ix *index.Index, owner, dirID uint64,
 	}
 
 	for _, di := range todo {
-		fmt.Fprintf(w, "%s:\n", di.Name)
+		fmt.Fprintf(w, "%s:\n", di.Name())
 		listDirectory(w, ix, owner, di.Location().ObjectID, true, showInode)
 	}
 }

@@ -295,6 +295,8 @@ type Key struct {
 	Offset   uint64
 }
 
+const KeyLen = 8 + 1 + 8
+
 // KeyCompare compares two BTRFS keys lexicographically. It returns 0 if
 // a==b, -1 if a < b and +1 if a > b.
 func KeyCompare(a, b Key) int {

@@ -99,8 +99,8 @@ type Index struct {
 	Generation uint64
 }
 
-// IndexOptions set options for opening a metdata index.
-type IndexOptions struct {
+// Options sets options for opening a metdata index.
+type Options struct {
 	ReadOnly   bool
 	BlockSize  uint
 	FSID       uuid.UUID
@@ -118,7 +118,7 @@ const (
 	indexMetadataEnd        = indexMetadataGeneration + 8
 )
 
-func newIndexMetadata(o *IndexOptions) indexMetadata {
+func newIndexMetadata(o *Options) indexMetadata {
 	m := [indexMetadataEnd]byte{}
 	binary.LittleEndian.PutUint64(m[indexMetadataVersion:], metadataVersion)
 	binary.LittleEndian.PutUint32(m[indexMetadataBlockSize:], uint32(
@@ -134,7 +134,7 @@ func (m indexMetadata) FSID() uuid.UUID    { return btrfs.SliceUUID(m[indexMetad
 func (m indexMetadata) Generation() uint64 { return btrfs.SliceUint64LE(m[indexMetadataGeneration:]) }
 
 // Open opens a metadata index with the specified options.
-func Open(path string, m os.FileMode, o *IndexOptions) (*Index, error) {
+func Open(path string, m os.FileMode, o *Options) (*Index, error) {
 	return open(path, m, o)
 }
 
@@ -147,9 +147,9 @@ func OpenReadOnly(path string) (*Index, error) {
 }
 
 //
-func open(path string, m os.FileMode, o *IndexOptions) (*Index, error) {
+func open(path string, m os.FileMode, o *Options) (*Index, error) {
 	if o == nil {
-		o = &IndexOptions{ReadOnly: true, Generation: ^uint64(0)}
+		o = &Options{ReadOnly: true, Generation: ^uint64(0)}
 	}
 	ix := &Index{Generation: o.Generation}
 	var err error
@@ -168,7 +168,7 @@ func open(path string, m os.FileMode, o *IndexOptions) (*Index, error) {
 	return ix, nil
 }
 
-func (ix *Index) checkUpdateMetadata(o *IndexOptions) error {
+func (ix *Index) checkUpdateMetadata(o *Options) error {
 	return ix.db.Update(func(tx *bbolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte("index"))
 		if err != nil {
@@ -198,6 +198,7 @@ func (ix *Index) checkUpdateMetadata(o *IndexOptions) error {
 	})
 }
 
+// Close closes the index and its underlying bbolt database.
 func (ix *Index) Close() { ix.db.Close() }
 
 func (ix *Index) ensureTx(writable bool) error {
@@ -237,6 +238,7 @@ func (ix *Index) InsertItem(k btrfs.Key, h btrfs.Header, item,
 	return nil
 }
 
+// Commit commits any pending transaction.
 func (ix *Index) Commit() error {
 	if ix.tx == nil {
 		return nil
@@ -305,6 +307,7 @@ type Range struct {
 	value    btrfs.Item
 }
 
+// Index returns the Index that this Range refers to.
 func (r *Range) Index() *Index { return r.ix }
 
 func (r *Range) HasNext() bool {

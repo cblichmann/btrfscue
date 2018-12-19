@@ -77,7 +77,7 @@ func (c *reconCommand) Run(args []string) {
 
 	buf := make([]byte, bs)
 
-	ix, err := index.Open(*metadata, 0644, &index.IndexOptions{
+	ix, err := index.Open(*metadata, 0644, &index.Options{
 		BlockSize:  uint(bs),
 		FSID:       c.id,
 		Generation: ^uint64(0),
