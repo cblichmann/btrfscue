@@ -35,10 +35,10 @@ source_only_tgz = ../btrfscue_$(version).orig.tar.xz
 this_dir := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 bin_dir := $(this_dir)/bin
 pkg_src := $(this_dir)/src/$(go_package)
+export GOPATH := $(this_dir)
 
 binaries := $(addprefix $(bin_dir)/,$(go_programs))
 sources := $(wildcard $(shell go list -f '{{.Dir}}/*.go' ./...))
-GOPATH := $(this_dir)
 
 .PHONY: all
 all: $(binaries)

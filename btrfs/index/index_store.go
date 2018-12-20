@@ -135,7 +135,7 @@ func (m indexMetadata) Generation() uint64 { return btrfs.SliceUint64LE(m[indexM
 
 // Open opens a metadata index with the specified options.
 func Open(path string, m os.FileMode, o *Options) (*Index, error) {
-	return open(path, m, o)
+	return openIndex(path, m, o)
 }
 
 // OpenIndexReadOnly opens a metadata index for reading/querying.
@@ -143,11 +143,11 @@ func OpenReadOnly(path string) (*Index, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	return open(path, 0644 /* Mode */, nil)
+	return openIndex(path, 0644 /* Mode */, nil)
 }
 
 //
-func open(path string, m os.FileMode, o *Options) (*Index, error) {
+func openIndex(path string, m os.FileMode, o *Options) (*Index, error) {
 	if o == nil {
 		o = &Options{ReadOnly: true, Generation: ^uint64(0)}
 	}
@@ -218,6 +218,9 @@ func (ix *Index) ensureTx(writable bool) error {
 	return err
 }
 
+// InsertItem inserts a filesystem item into the index, referenceable by its
+// BTRFS key. Also stores the item's owner and generation number, as well as
+// its inline data.
 func (ix *Index) InsertItem(k btrfs.Key, h btrfs.Header, item,
 	data []byte) error {
 	if err := ix.ensureTx(true); err != nil {
@@ -365,7 +368,7 @@ func (ix *Index) FullRange() (FullRange, []byte) {
 		cursor: ix.bucket.Cursor(),
 		end:    newIndexKey(^uint64(0), KL(), ix.Generation),
 	}}
-	// No check, since open should fail if there's no data
+	// No check, since openIndex should fail if there's no data
 	r.key, r.value = r.cursor.First()
 	return r, r.value.Data()
 }
