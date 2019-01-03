@@ -2,7 +2,7 @@
 
 /*
  * btrfscue version 0.5
- * Copyright (c)2011-2018 Christian Blichmann
+ * Copyright (c)2011-2019 Christian Blichmann
  *
  * Rescue FS API
  *

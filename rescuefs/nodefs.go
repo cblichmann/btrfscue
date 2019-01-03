@@ -2,7 +2,7 @@
 
 /*
  * btrfscue version 0.5
- * Copyright (c)2011-2018 Christian Blichmann
+ * Copyright (c)2011-2019 Christian Blichmann
  *
  * A "rescue" FS that provides a read-only view backed by index metadata
  *

@@ -151,7 +151,7 @@ Copyright/License
 -----------------
 
 btrfscue version 0.5
-Copyright (c)2011-2018 Christian Blichmann <mail@blichmann.eu>
+Copyright (c)2011-2019 Christian Blichmann <mail@blichmann.eu>
 
 btrfscue is licensed under a two-clause BSD license, see the LICENSE file
 for details.
