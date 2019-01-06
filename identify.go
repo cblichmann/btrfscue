@@ -238,6 +238,11 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 	sort.Sort(sort.Reverse(occ))
 
+	if len(occ) == 0 {
+		warnf("no filesystem id occured more than %d times, check "+
+			"--min-occurrence\n", *ic.minOccurrence)
+	}
+
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
 	fmt.Fprintln(w, "fsid\tcount\tentropy\tblock size")
 	for _, entry := range occ {
