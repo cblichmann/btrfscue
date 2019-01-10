@@ -37,9 +37,12 @@ const (
 	// Magic spells "_BHRfS_M" in little-endian
 	Magic = 0x4d5f53665248425f
 
+	// X86RegularPageSize is the size of a regular memory page on X86.
+	X86RegularPageSize = 1 << 12
+
 	// DefaultBlockSize is the default block size for BTRFS. It is the size
-	// of a single page on x86 (4096 bytes).
-	DefaultBlockSize = 1 << 12
+	// of four pages on x86 (16384 bytes).
+	DefaultBlockSize = 4 * X86RegularPageSize
 )
 
 // Offsets of all superblock copies

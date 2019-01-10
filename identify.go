@@ -76,12 +76,12 @@ func ReadBlockAt(r io.ReaderAt, block []byte, offset, blockSize uint64) error {
 	return err
 }
 
-type uint64Slice []uint64
+type Uint64Array []uint64
 
-func (a uint64Slice) Len() int           { return len(a) }
-func (a uint64Slice) Less(i, j int) bool { return a[i] < a[j] }
-func (a uint64Slice) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a uint64Slice) Sort()              { sort.Sort(a) }
+func (a Uint64Array) Len() int           { return len(a) }
+func (a Uint64Array) Less(i, j int) bool { return a[i] < a[j] }
+func (a Uint64Array) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a Uint64Array) Sort()              { sort.Sort(a) }
 
 type foundFSEntry struct {
 	FSID      uuid.UUID
@@ -160,30 +160,27 @@ func (ic *identifyCommand) Run(args []string) {
 	verbosef("sampling %d blocks...\n", numSamples)
 
 	rand.Seed(time.Now().UnixNano())
-	sampleSet := make(map[uint64]bool)
+	samples := make(Uint64Array, 0, numBlocks+300)
 	for i := 0; i < 100; i++ {
-		sampleSet[btrfs.SuperInfoOffset+uint64(i)*bs] = true
-		sampleSet[btrfs.SuperInfoOffset2+uint64(i+100)*bs] = true
+		samples = append(samples, btrfs.SuperInfoOffset+uint64(i)*bs,
+			btrfs.SuperInfoOffset2+uint64(i+100)*bs)
 	}
 	if devSize >= btrfs.SuperInfoOffset3 {
 		for i := 0; i < 100; i++ {
-			sampleSet[btrfs.SuperInfoOffset3+uint64(i+200)*bs] = true
+			samples = append(samples, btrfs.SuperInfoOffset3+uint64(i+200)*bs)
 		}
 		if devSize >= btrfs.SuperInfoOffset4 {
+			// For completeness, handle huge devices
 			for i := 0; i < 100; i++ {
-				sampleSet[btrfs.SuperInfoOffset3+uint64(i+300)*bs] = true
+				samples = append(samples, btrfs.SuperInfoOffset3+uint64(i+
+					300)*bs)
 			}
 		}
 	}
-	for uint(len(sampleSet)) < numSamples {
-		sampleSet[uint64(rand.Int63n(numBlocks))*bs] = true
+	for uint(len(samples)) < numSamples {
+		samples = append(samples, uint64(rand.Int63n(numBlocks))*bs)
 	}
-
 	// Sort samples vector to access device in one direction only
-	samples := make(uint64Slice, 0, len(sampleSet))
-	for offset, _ := range sampleSet {
-		samples = append(samples, offset)
-	}
 	samples.Sort()
 
 	bar := pb.New(len(samples))
@@ -191,8 +188,8 @@ func (ic *identifyCommand) Run(args []string) {
 
 	buf := make([]byte, bs)
 	type histEntry struct {
-		Count     uint
-		BlockSize uint32
+		Count        uint
+		BlockSizeSum uint64
 	}
 	hist := make(map[uuid.UUID]*histEntry)
 	for i, offset := range samples {
@@ -217,10 +214,10 @@ func (ic *identifyCommand) Run(args []string) {
 			if h.NrItems() > 0 {
 				item := btrfs.Item(buf[btrfs.HeaderLen:])
 				// Since item headers and their data grow towards each other,
-				// the first item's offset will be the largest. Try to guess the
-				// block size from that.
-				entry.BlockSize = uint32((uint64(item.Offset()) + bs/2) / bs *
-					bs)
+				// the first item's offset will be the largest. In order to
+				// guess the actual block size, sum offsets for all entries
+				// belonging to an FSID to compute the average later.
+				entry.BlockSizeSum += uint64(item.Offset())
 			}
 		}
 		entry.Count++
@@ -232,8 +229,12 @@ func (ic *identifyCommand) Run(args []string) {
 	occ := make(foundFSEntries, 0, len(hist))
 	for uuid, entry := range hist {
 		if entry.Count > *ic.minOccurrence {
+			// Compute average and round to nearest 4KiB.
+			guess := uint32(float64(entry.BlockSizeSum)/float64(entry.Count)+
+				btrfs.X86RegularPageSize) / btrfs.X86RegularPageSize *
+				btrfs.X86RegularPageSize
 			occ = append(occ, foundFSEntry{uuid, entry.Count,
-				coding.ShannonEntropy(uuid[:]), entry.BlockSize})
+				coding.ShannonEntropy(uuid[:]), guess})
 		}
 	}
 	sort.Sort(sort.Reverse(occ))
