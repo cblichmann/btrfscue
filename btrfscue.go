@@ -32,17 +32,13 @@ import (
 	"fmt"
 	"os"
 
-	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/cliutil"
+	_ "blichmann.eu/code/btrfscue/identify"
 	"blichmann.eu/code/btrfscue/subcommand"
 )
 
 var (
 	// Global options
-	blockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
-		"filesystem block size")
-	metadata = flag.String("metadata", os.Getenv("BTRFSCUE_METADATA"),
-		"metadata database to use")
-
 	help    = flag.Bool("help", false, "display this help and exit")
 	verbose = flag.Bool("verbose", false, "explain what is being done")
 	version = flag.Bool("version", false, "display version and exit")
@@ -57,28 +53,7 @@ func init() {
 	subcommand.Commands.RegisterHidden("help", &helpCommand{})
 }
 
-func warnf(format string, v ...interface{}) {
-	fmt.Fprintf(os.Stderr, "btrfscue: "+format, v...)
-}
-
-func fatalf(format string, v ...interface{}) {
-	warnf(format, v...)
-	os.Exit(1)
-}
-
-func verbosef(format string, v ...interface{}) {
-	if *verbose {
-		fmt.Printf(format, v...)
-	}
-}
-
-func reportError(err error) {
-	if err != nil {
-		fatalf("%s\n", err)
-	}
-}
-
-// printUsage Prints more GNU-looking usage text.
+// printUsage prints GNU-looking usage text.
 func printUsage() {
 	fmt.Printf("Usage: %s COMMAND [OPTION]...\n"+
 		"Recover data from damaged BTRFS filesystems.\n\n"+
@@ -111,8 +86,9 @@ func main() {
 			"conditions.\n\n")
 		os.Exit(0)
 	}
+	cliutil.SetVerbose(*verbose)
 	if flag.NArg() == 0 {
-		fatalf("missing command\n%s\n", fatalHelp)
+		cliutil.Fatalf("missing command\n%s\n", fatalHelp)
 	}
 
 	startProfiling()

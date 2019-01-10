@@ -25,13 +25,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package identify // import "blichmann.eu/code/btrfscue/identify"
 
 import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"sort"
@@ -41,40 +40,13 @@ import (
 	"gopkg.in/cheggaaa/pb.v1"
 
 	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/btrfscue"
+	"blichmann.eu/code/btrfscue/cliutil"
 	"blichmann.eu/code/btrfscue/coding"
+	"blichmann.eu/code/btrfscue/ioutil"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
 )
-
-const (
-	FromStart = iota
-	FromCurrent
-	FromEnd
-)
-
-func CheckedBtrfsDeviceSize(rs io.ReadSeeker, blockSize uint64) (uint64,
-	error) {
-	size, err := rs.Seek(0, FromEnd)
-	if err == nil {
-		if uint64(size) < blockSize {
-			err = fmt.Errorf("device smaller than block size: %d < %d", size,
-				blockSize)
-		} else if uint64(size) < btrfs.SuperInfoOffset2+blockSize*100 {
-			// Sanity check: BTRFS minimum filesystem size is 64MiB plus a few
-			// blocks
-			err = fmt.Errorf("device too small, must be > 64MiB: %d", size)
-		}
-	}
-	return uint64(size), err
-}
-
-func ReadBlockAt(r io.ReaderAt, block []byte, offset, blockSize uint64) error {
-	read, err := r.ReadAt(block, int64(offset))
-	if uint64(read) != blockSize {
-		err = fmt.Errorf("read %d bytes, expected: %d", read, blockSize)
-	}
-	return err
-}
 
 type Uint64Array []uint64
 
@@ -127,21 +99,21 @@ func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
 
 func (ic *identifyCommand) Run(args []string) {
 	if len(args) == 0 {
-		fatalf("missing device file\n")
+		cliutil.Fatalf("missing device file\n")
 	} else if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
+		cliutil.Fatalf("extra operand '%s'\n", args[1])
 	}
 
 	filename := args[0]
 	f, err := os.Open(filename)
-	reportError(err)
+	cliutil.ReportError(err)
 	defer f.Close()
 
-	bs := uint64(*blockSize)
+	bs := uint64(*btrfscue.BlockSize)
 
 	// Get total file/device size
-	devSize, err := CheckedBtrfsDeviceSize(f, bs)
-	reportError(err)
+	devSize, err := btrfs.CheckDeviceSize(f, bs)
+	cliutil.ReportError(err)
 
 	// Parse sampleFraction * 100% of all blocks (minimum minBlocks, up to
 	// maxBlocks) like this:
@@ -157,7 +129,7 @@ func (ic *identifyCommand) Run(args []string) {
 		numSamples = *ic.maxBlocks
 	}
 
-	verbosef("sampling %d blocks...\n", numSamples)
+	cliutil.Verbosef("sampling %d blocks...\n", numSamples)
 
 	rand.Seed(time.Now().UnixNano())
 	samples := make(Uint64Array, 0, numBlocks+300)
@@ -194,7 +166,7 @@ func (ic *identifyCommand) Run(args []string) {
 	hist := make(map[uuid.UUID]*histEntry)
 	for i, offset := range samples {
 		bar.Set(i + 1)
-		reportError(ReadBlockAt(f, buf, offset, bs))
+		cliutil.ReportError(ioutil.ReadBlockAt(f, buf, offset, bs))
 		h := btrfs.Header(buf)
 		// Only gather blocks that look like leaves
 		if !h.IsLeaf() {
@@ -240,7 +212,7 @@ func (ic *identifyCommand) Run(args []string) {
 	sort.Sort(sort.Reverse(occ))
 
 	if len(occ) == 0 {
-		warnf("no filesystem id occured more than %d times, check "+
+		cliutil.Warnf("no filesystem id occured more than %d times, check "+
 			"--min-occurrence\n", *ic.minOccurrence)
 	}
 

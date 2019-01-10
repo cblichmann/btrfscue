@@ -2,7 +2,7 @@
  * btrfscue version 0.5
  * Copyright (c)2011-2019 Christian Blichmann
  *
- * Sub-command to dump the index contents.
+ * I/O utility routines
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,51 +25,17 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package ioutil // import "blichmann.eu/code/btrfscue/ioutil"
 
 import (
-	"flag"
 	"fmt"
-
-	_ "blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"io"
 )
 
-type dumpIndexCommand struct {
-}
-
-func (c *dumpIndexCommand) DefineFlags(fs *flag.FlagSet) {
-}
-
-func (c *dumpIndexCommand) Run(args []string) {
-	if len(args) > 0 {
-		cliutil.Fatalf("extra operand: %s\n", args[0])
+func ReadBlockAt(r io.ReaderAt, block []byte, offset, blockSize uint64) error {
+	read, err := r.ReadAt(block, int64(offset))
+	if uint64(read) != blockSize {
+		err = fmt.Errorf("read %d bytes, expected: %d", read, blockSize)
 	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
-	cliutil.ReportError(err)
-	defer ix.Close()
-
-	last := ^uint64(0)
-	for r, v := ix.FullRange(); r.HasNext(); v = r.Next() {
-		if o := r.Owner(); o != last {
-			fmt.Printf("owner %d\n", o)
-			last = o
-		}
-		k := r.Key()
-		fmt.Printf("%s @ %d\n", k, r.Generation())
-		_ = v
-	}
-}
-
-func init() {
-	subcommand.Register("dump-index",
-		"for debugging, dump the index in text format",
-		&dumpIndexCommand{})
+	return err
 }

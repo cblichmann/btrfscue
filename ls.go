@@ -39,6 +39,8 @@ import (
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/btrfscue"
+	"blichmann.eu/code/btrfscue/cliutil"
 	"blichmann.eu/code/btrfscue/subcommand"
 )
 
@@ -152,12 +154,12 @@ func (c *lsCommand) Run(args []string) {
 	if len(args) == 0 {
 		args = append(args, "/")
 	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
+	if len(*btrfscue.Metadata) == 0 {
+		cliutil.Fatalf("missing metadata option\n")
 	}
 
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
+	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
+	cliutil.ReportError(err)
 	defer ix.Close()
 
 	owner := uint64(btrfs.FSTreeObjectID)
@@ -174,7 +176,7 @@ func (c *lsCommand) Run(args []string) {
 		}
 
 		if di := ix.FindDirItemForPath(owner, p); di == nil {
-			warnf("cannot lookup '%s': No such file or directory\n", p)
+			cliutil.Warnf("cannot lookup '%s': No such file or directory\n", p)
 			continue
 		} else if !di.IsDir() {
 			listDirItem(w, ix, owner, di, c.inode)

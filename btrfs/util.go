@@ -2,7 +2,7 @@
  * btrfscue version 0.5
  * Copyright (c)2011-2019 Christian Blichmann
  *
- * Sub-command to dump the index contents.
+ * Global flags applicable to all/most commands
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,51 +25,24 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package btrfs // import "blichmann.eu/code/btrfscue/btrfs"
 
 import (
-	"flag"
 	"fmt"
-
-	_ "blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"io"
 )
 
-type dumpIndexCommand struct {
-}
-
-func (c *dumpIndexCommand) DefineFlags(fs *flag.FlagSet) {
-}
-
-func (c *dumpIndexCommand) Run(args []string) {
-	if len(args) > 0 {
-		cliutil.Fatalf("extra operand: %s\n", args[0])
-	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
-	cliutil.ReportError(err)
-	defer ix.Close()
-
-	last := ^uint64(0)
-	for r, v := ix.FullRange(); r.HasNext(); v = r.Next() {
-		if o := r.Owner(); o != last {
-			fmt.Printf("owner %d\n", o)
-			last = o
+func CheckDeviceSize(rs io.ReadSeeker, blockSize uint64) (uint64, error) {
+	size, err := rs.Seek(0, io.SeekEnd)
+	if err == nil {
+		if uint64(size) < blockSize {
+			err = fmt.Errorf("device smaller than block size: %d < %d", size,
+				blockSize)
+		} else if uint64(size) < SuperInfoOffset2+blockSize*100 {
+			// Sanity check: BTRFS minimum filesystem size is 64MiB plus a few
+			// blocks
+			err = fmt.Errorf("device too small, must be > 64MiB: %d", size)
 		}
-		k := r.Key()
-		fmt.Printf("%s @ %d\n", k, r.Generation())
-		_ = v
 	}
-}
-
-func init() {
-	subcommand.Register("dump-index",
-		"for debugging, dump the index in text format",
-		&dumpIndexCommand{})
+	return uint64(size), err
 }

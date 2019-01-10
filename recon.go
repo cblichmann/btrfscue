@@ -36,6 +36,9 @@ import (
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/btrfscue"
+	"blichmann.eu/code/btrfscue/cliutil"
+	"blichmann.eu/code/btrfscue/ioutil"
 	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
 )
@@ -52,39 +55,39 @@ func (c *reconCommand) DefineFlags(fs *flag.FlagSet) {
 
 func (c *reconCommand) Run(args []string) {
 	if len(args) == 0 {
-		fatalf("missing device file\n")
+		cliutil.Fatalf("missing device file\n")
 	}
 	if len(args) > 1 {
-		fatalf("extra operand '%s'\n", args[1])
+		cliutil.Fatalf("extra operand '%s'\n", args[1])
 	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
+	if len(*btrfscue.Metadata) == 0 {
+		cliutil.Fatalf("missing metadata option\n")
 	}
 	if c.id.IsZero() {
-		fatalf("missing id option\n")
+		cliutil.Fatalf("missing id option\n")
 	}
 
 	filename := args[0]
 	f, err := os.Open(filename)
-	reportError(err)
+	cliutil.ReportError(err)
 	defer f.Close()
 
-	bs := uint64(*blockSize)
+	bs := uint64(*btrfscue.BlockSize)
 
-	devSize, err := CheckedBtrfsDeviceSize(f, bs)
-	reportError(err)
+	devSize, err := btrfs.CheckDeviceSize(f, bs)
+	cliutil.ReportError(err)
 	devSize = devSize - (devSize % bs)
 
 	buf := make([]byte, bs)
 
-	ix, err := index.Open(*metadata, 0644, &index.Options{
+	ix, err := index.Open(*btrfscue.Metadata, 0644, &index.Options{
 		BlockSize:  uint(bs),
 		FSID:       c.id,
 		Generation: ^uint64(0),
 	})
-	reportError(err)
+	cliutil.ReportError(err)
 	defer func() {
-		reportError(ix.Commit())
+		cliutil.ReportError(ix.Commit())
 		ix.Close()
 	}()
 
@@ -95,10 +98,10 @@ func (c *reconCommand) Run(args []string) {
 
 	// Start right after the first superblock
 	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
-		if err = ReadBlockAt(f, buf, off, bs); err == io.EOF {
+		if err = ioutil.ReadBlockAt(f, buf, off, bs); err == io.EOF {
 			break
 		} else if err != nil {
-			reportError(err)
+			cliutil.ReportError(err)
 		}
 		bar.Set64(int64(off))
 		l := btrfs.Leaf(buf)
@@ -110,14 +113,15 @@ func (c *reconCommand) Run(args []string) {
 		}
 		// Also skip all non-leaves (= nodes)
 		if !h.IsLeaf() {
-			//warnf("non-leaf %d at offset %d, level %d\n", h.ByteNr(), off,
-			//	h.Level())
+			//cliutil.Warnf("non-leaf %d at offset %d, level %d\n", h.ByteNr(),
+			//	off, h.Level())
 			continue
 		}
 		// The free space of a leaf is between offsets
 		// [ btrfs.HeaderSize, l.Items(l.Len() - 1).Offset() ).
 		for i := 0; i < l.Len(); i++ {
-			reportError(ix.InsertItem(l.Key(i), h, l.Item(i), l.Data(i)))
+			cliutil.ReportError(ix.InsertItem(l.Key(i), h, l.Item(i),
+				l.Data(i)))
 		}
 	}
 	bar.Set64(int64(devSize))

@@ -36,6 +36,8 @@ import (
 	"syscall"
 
 	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/btrfscue"
+	"blichmann.eu/code/btrfscue/cliutil"
 	"blichmann.eu/code/btrfscue/rescuefs"
 	"blichmann.eu/code/btrfscue/subcommand"
 )
@@ -48,17 +50,17 @@ func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
 
 func (c *mountCommand) Run(args []string) {
 	if len(args) == 0 {
-		fatalf("missing mount point\n")
+		cliutil.Fatalf("missing mount point\n")
 	}
 	if len(args) > 2 {
-		fatalf("extra operand '%s'\n", args[2])
+		cliutil.Fatalf("extra operand '%s'\n", args[2])
 	}
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
+	if len(*btrfscue.Metadata) == 0 {
+		cliutil.Fatalf("missing metadata option\n")
 	}
 
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
+	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
+	cliutil.ReportError(err)
 	defer ix.Close()
 
 	mountPoint := args[len(args)-1]
@@ -70,22 +72,22 @@ func (c *mountCommand) Run(args []string) {
 	}()
 	if len(args) == 2 {
 		dev, err = os.Open(args[1])
-		reportError(err)
+		cliutil.ReportError(err)
 	} else {
-		warnf("no device file given, only inline file data will be visible\n")
+		cliutil.Warnf("no device file given, only inline file data will be visible\n")
 	}
 
-	fs := rescuefs.New(*metadata, ix, dev)
-	reportError(fs.Mount(mountPoint))
-	verbosef("mounted rescue FS on %s\n", mountPoint)
+	fs := rescuefs.New(*btrfscue.Metadata, ix, dev)
+	cliutil.ReportError(fs.Mount(mountPoint))
+	cliutil.Verbosef("mounted rescue FS on %s\n", mountPoint)
 	go fs.Serve()
 
 	// Break and unmount on CTRL+C or TERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	_ = <-ch
-	warnf("got signal, unmounting...\n")
-	reportError(fs.Unmount())
+	cliutil.Warnf("got signal, unmounting...\n")
+	cliutil.ReportError(fs.Unmount())
 }
 
 func init() {

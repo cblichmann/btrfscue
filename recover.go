@@ -30,7 +30,10 @@ package main
 import (
 	"flag"
 
+	_ "blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/btrfscue"
+	"blichmann.eu/code/btrfscue/cliutil"
 	_ "blichmann.eu/code/btrfscue/subcommand"
 )
 
@@ -44,26 +47,26 @@ func (c *recoverCommand) DefineFlags(fs *flag.FlagSet) {
 }
 
 func (c *recoverCommand) Run([]string) {
-	if len(*metadata) == 0 {
-		fatalf("missing metadata option\n")
+	if len(*btrfscue.Metadata) == 0 {
+		cliutil.Fatalf("missing metadata option\n")
 	}
 
-	ix, err := index.OpenReadOnly(*metadata)
-	reportError(err)
+	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
+	cliutil.ReportError(err)
 	defer ix.Close()
 
 	for r, v := ix.Subvolumes(); r.HasNext(); v = r.Next() {
-		//verbosef("ID %d gen %d cgen %d top level - parent_uuid %s received_uuid %s uuid %s\n",
+		//cliutil.Verbosef("ID %d gen %d cgen %d top level - parent_uuid %s received_uuid %s uuid %s\n",
 		//	r.Key().ObjectID, v.OTransID(), v.Generation(), v.ParentUUID(), v.ReceivedUUID(), v.UUID())
-		verbosef("	item %s itemoff %d itemsize %d\n", r.Key(), r.Item().Offset(), r.Item().Size())
-		verbosef("		root data bytenr %d level %d dirid %d refs %d gen %d lastsnap %d\n",
+		cliutil.Verbosef("	item %s itemoff %d itemsize %d\n", r.Key(), r.Item().Offset(), r.Item().Size())
+		cliutil.Verbosef("		root data bytenr %d level %d dirid %d refs %d gen %d lastsnap %d\n",
 			v.ByteNr(), v.Level(), v.RootDirID(), v.Refs(), v.Generation(), v.LastSnapshot())
 	}
 
 	return
 	//inode := uint64(264) // src.zip
 	//ii := ix.InodeItem(ix.FindInodeItem(inode))
-	//verbosef("file size: %d\n", ii.Size)
+	//cliutil.Verbosef("file size: %d\n", ii.Size)
 
 	//lo := uint64(0)
 	//for i, end := ix.Range(
@@ -71,17 +74,17 @@ func (c *recoverCommand) Run([]string) {
 	//	btrfs.KL(btrfs.ExtentDataKey, inode)); i < end; i++ {
 	//	fe := &btrfs.FileExtentItem{} //ix.Item(i).Data.(*btrfs.FileExtentItem)
 	//	lo = fe.DiskByteNr
-	//	verbosef("file extent: %s %d %d %d %d\n", ix.Key(i),
+	//	cliutil.Verbosef("file extent: %s %d %d %d %d\n", ix.Key(i),
 	//		lo, fe.DiskNumBytes, fe.NumBytes, fe.Offset)
 	//	_, of := ix.Physical(lo)
-	//	verbosef("%d\n", of)
+	//	cliutil.Verbosef("%d\n", of)
 	//}
 
 	//for i, end := ix.Range(
 	//	btrfs.KF(btrfs.ChunkItemKey),
 	//	btrfs.KL(btrfs.ChunkItemKey)); i < end; i++ {
 	//	c := ix.Chunk(i)
-	//	verbosef("%s %d 0x%x\n", ix.Key(i), c.Length, c.Stripes[0].Offset)
+	//	cliutil.Verbosef("%s %d 0x%x\n", ix.Key(i), c.Length, c.Stripes[0].Offset)
 	//}
 }
 
