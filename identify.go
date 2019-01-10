@@ -117,9 +117,9 @@ type identifyCommand struct {
 func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
 	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
 		"fraction of blocks to sample for filesystem ids")
-	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
+	ic.minBlocks = fs.Uint("min-blocks", 10000, "minimum number of blocks to "+
 		"scan")
-	ic.maxBlocks = fs.Uint("max-blocks", 500000, "maximum number of blocks "+
+	ic.maxBlocks = fs.Uint("max-blocks", 1000000, "maximum number of blocks "+
 		"to scan")
 	ic.minOccurrence = fs.Uint("min-occurrence", 4, "minimum number of "+
 		"occurrences of an id for a file system to be reported")
