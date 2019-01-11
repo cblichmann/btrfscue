@@ -89,12 +89,44 @@ type identifyCommand struct {
 func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
 	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
 		"fraction of blocks to sample for filesystem ids")
-	ic.minBlocks = fs.Uint("min-blocks", 10000, "minimum number of blocks to "+
+	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
 		"scan")
 	ic.maxBlocks = fs.Uint("max-blocks", 1000000, "maximum number of blocks "+
 		"to scan")
 	ic.minOccurrence = fs.Uint("min-occurrence", 4, "minimum number of "+
 		"occurrences of an id for a file system to be reported")
+}
+
+func MakeSampleOffsets(devSize, blockSize, numSamples uint64) []uint64 {
+	sampleSet := make(map[uint64]bool)
+	for i := 0; i < 100; i++ {
+		sampleSet[btrfs.SuperInfoOffset+uint64(i)*blockSize] = true
+		sampleSet[btrfs.SuperInfoOffset2+uint64(i+100)*blockSize] = true
+	}
+	if devSize >= btrfs.SuperInfoOffset3 {
+		for i := 0; i < 100; i++ {
+			sampleSet[btrfs.SuperInfoOffset3+uint64(i+200)*blockSize] = true
+		}
+		if devSize >= btrfs.SuperInfoOffset4 {
+			// For completeness, handle huge devices
+			for i := 0; i < 100; i++ {
+				sampleSet[btrfs.SuperInfoOffset3+uint64(i+300)*blockSize] = true
+			}
+		}
+	}
+	numBlocks := int64(devSize / blockSize)
+	for uint64(len(sampleSet)) < numSamples {
+		sampleSet[uint64(rand.Int63n(numBlocks))*blockSize] = true
+	}
+	// Sort samples vector to access device in one direction only
+	samples := make(Uint64Array, numSamples)
+	i := 0
+	for o, _ := range sampleSet {
+		samples[i] = o
+		i++
+	}
+	samples.Sort()
+	return samples
 }
 
 func (ic *identifyCommand) Run(args []string) {
@@ -121,8 +153,7 @@ func (ic *identifyCommand) Run(args []string) {
 	//    FSIDs.
 	// 2. Read the rest of the blocks distributed randomly and collect FSIDs
 	// Return FSIDs that are most common.
-	numBlocks := int64(devSize / bs)
-	numSamples := uint(*ic.sampleFraction * float64(numBlocks))
+	numSamples := uint(*ic.sampleFraction * float64(devSize/bs))
 	if numSamples < *ic.minBlocks {
 		numSamples = *ic.minBlocks
 	} else if numSamples > *ic.maxBlocks {
@@ -132,28 +163,7 @@ func (ic *identifyCommand) Run(args []string) {
 	cliutil.Verbosef("sampling %d blocks...\n", numSamples)
 
 	rand.Seed(time.Now().UnixNano())
-	samples := make(Uint64Array, 0, numBlocks+300)
-	for i := 0; i < 100; i++ {
-		samples = append(samples, btrfs.SuperInfoOffset+uint64(i)*bs,
-			btrfs.SuperInfoOffset2+uint64(i+100)*bs)
-	}
-	if devSize >= btrfs.SuperInfoOffset3 {
-		for i := 0; i < 100; i++ {
-			samples = append(samples, btrfs.SuperInfoOffset3+uint64(i+200)*bs)
-		}
-		if devSize >= btrfs.SuperInfoOffset4 {
-			// For completeness, handle huge devices
-			for i := 0; i < 100; i++ {
-				samples = append(samples, btrfs.SuperInfoOffset3+uint64(i+
-					300)*bs)
-			}
-		}
-	}
-	for uint(len(samples)) < numSamples {
-		samples = append(samples, uint64(rand.Int63n(numBlocks))*bs)
-	}
-	// Sort samples vector to access device in one direction only
-	samples.Sort()
+	samples := MakeSampleOffsets(devSize, bs, uint64(numSamples))
 
 	bar := pb.New(len(samples))
 	bar.Start()
