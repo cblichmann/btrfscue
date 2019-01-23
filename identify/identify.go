@@ -28,7 +28,6 @@
 package identify // import "blichmann.eu/code/btrfscue/identify"
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -42,10 +41,8 @@ import (
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/coding"
 	"blichmann.eu/code/btrfscue/ioutil"
 	"blichmann.eu/code/btrfscue/subcommand"
-	"blichmann.eu/code/btrfscue/uuid"
 )
 
 type Uint64Array []uint64
@@ -54,48 +51,6 @@ func (a Uint64Array) Len() int           { return len(a) }
 func (a Uint64Array) Less(i, j int) bool { return a[i] < a[j] }
 func (a Uint64Array) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a Uint64Array) Sort()              { sort.Sort(a) }
-
-type foundFSEntry struct {
-	FSID      uuid.UUID
-	Count     uint
-	Entropy   float64
-	BlockSize uint32
-}
-
-type foundFSEntries []foundFSEntry
-
-func (a foundFSEntries) Len() int { return len(a) }
-func (a foundFSEntries) Less(i, j int) bool {
-	ci, cj := a[i].Count, a[j].Count
-	if ci != cj {
-		return ci < cj
-	}
-	ei, ej := a[i].Entropy, a[j].Entropy
-	if ei != ej {
-		return ei < ej
-	}
-	return bytes.Compare(a[i].FSID[:], a[j].FSID[:]) < 0
-}
-func (a foundFSEntries) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a foundFSEntries) Sort()         { sort.Sort(a) }
-
-type identifyCommand struct {
-	sampleFraction *float64
-	minBlocks      *uint
-	maxBlocks      *uint
-	minOccurrence  *uint
-}
-
-func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
-	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
-		"fraction of blocks to sample for filesystem ids")
-	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
-		"scan")
-	ic.maxBlocks = fs.Uint("max-blocks", 1000000, "maximum number of blocks "+
-		"to scan")
-	ic.minOccurrence = fs.Uint("min-occurrence", 4, "minimum number of "+
-		"occurrences of an id for a file system to be reported")
-}
 
 func MakeSampleOffsets(devSize, blockSize, numSamples uint64) []uint64 {
 	sampleSet := make(map[uint64]bool)
@@ -127,6 +82,24 @@ func MakeSampleOffsets(devSize, blockSize, numSamples uint64) []uint64 {
 	}
 	samples.Sort()
 	return samples
+}
+
+type identifyCommand struct {
+	sampleFraction *float64
+	minBlocks      *uint
+	maxBlocks      *uint
+	minOccurrence  *uint
+}
+
+func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
+	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
+		"fraction of blocks to sample for filesystem ids")
+	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
+		"scan")
+	ic.maxBlocks = fs.Uint("max-blocks", 1000000, "maximum number of blocks "+
+		"to scan")
+	ic.minOccurrence = fs.Uint("min-occurrence", 4, "minimum number of "+
+		"occurrences of an id for a file system to be reported")
 }
 
 func (ic *identifyCommand) Run(args []string) {
@@ -169,58 +142,15 @@ func (ic *identifyCommand) Run(args []string) {
 	bar.Start()
 
 	buf := make([]byte, bs)
-	type histEntry struct {
-		Count        uint
-		BlockSizeSum uint64
-	}
-	hist := make(map[uuid.UUID]*histEntry)
+	coll := FSIDCollecter{}
 	for i, offset := range samples {
 		bar.Set(i + 1)
 		cliutil.ReportError(ioutil.ReadBlockAt(f, buf, offset, bs))
-		h := btrfs.Header(buf)
-		// Only gather blocks that look like leaves
-		if !h.IsLeaf() {
-			continue
-		}
-		fsid := h.FSID()
-		// Skip blocks with zero FSID or with an FSID that consists only of
-		// 0xFF bytes
-		if fsid.IsZero() || fsid.IsAllFs() {
-			continue
-		}
-		entry, ok := hist[fsid]
-		if !ok {
-			entry = &histEntry{}
-			hist[fsid] = entry
-		} else {
-			if h.NrItems() > 0 {
-				item := btrfs.Item(buf[btrfs.HeaderLen:])
-				// Since item headers and their data grow towards each other,
-				// the first item's offset will be the largest. In order to
-				// guess the actual block size, sum offsets for all entries
-				// belonging to an FSID to compute the average later.
-				entry.BlockSizeSum += uint64(item.Offset())
-			}
-		}
-		entry.Count++
+		coll.CollectBlock(buf)
 	}
 	bar.Finish()
 
-	// Sort FSIDs by number of times found, skip items that occur less than
-	// minOccurrence times.
-	occ := make(foundFSEntries, 0, len(hist))
-	for uuid, entry := range hist {
-		if entry.Count > *ic.minOccurrence {
-			// Compute average and round to nearest 4KiB.
-			guess := uint32(float64(entry.BlockSizeSum)/float64(entry.Count)+
-				btrfs.X86RegularPageSize) / btrfs.X86RegularPageSize *
-				btrfs.X86RegularPageSize
-			occ = append(occ, foundFSEntry{uuid, entry.Count,
-				coding.ShannonEntropy(uuid[:]), guess})
-		}
-	}
-	sort.Sort(sort.Reverse(occ))
-
+	occ := coll.Entries(*ic.minOccurrence)
 	if len(occ) == 0 {
 		cliutil.Warnf("no filesystem id occured more than %d times, check "+
 			"--min-occurrence\n", *ic.minOccurrence)
