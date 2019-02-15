@@ -1,8 +1,18 @@
 language: go
 
 go:
-    - 1.8
+    # "1.x" always refers to the latest Go version, inc. the patch release.
+    # e.g. "1.x" is 1.11 until 1.11.1 is available.
+    - 1.x
+    - 1.7.x
+    - 1.8.x
+    - 1.9.x
+    - 1.10.x
+    - 1.11.x
     - tip
 
-script:
+before_script:
     - make
+
+script:
+    - make test
