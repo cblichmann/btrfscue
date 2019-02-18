@@ -55,7 +55,7 @@ func (r *rescueFS) newNode() *basicNode {
 
 func (r *rescueFS) OnMount(c *nodefs.FileSystemConnector) {
 	i := r.root.Inode()
-	i.NewChild("rescue", true, newRescueNode(r.ix, btrfs.FSTreeObjectID,
+	i.NewChild("rescue", true, newRescueNode(r, btrfs.FSTreeObjectID,
 		btrfs.FirstFreeObjectID))
 	i.NewChild("metadata", false, newMetadataNode(r))
 }
@@ -106,6 +106,7 @@ func (n *metadataNode) Open(flags uint32, context *fuse.Context) (
 
 type rescueNode struct {
 	nodefs.Node
+	fs       *rescueFS
 	ix       *index.Index
 	owner    uint64
 	ixInode  uint64
@@ -113,10 +114,11 @@ type rescueNode struct {
 	dirItems map[string]btrfs.DirItem
 }
 
-func newRescueNode(ix *index.Index, owner, inode uint64) *rescueNode {
+func newRescueNode(fs *rescueFS, owner, inode uint64) *rescueNode {
 	return &rescueNode{
 		Node:     nodefs.NewDefaultNode(),
-		ix:       ix,
+		fs:       fs,
+		ix:       fs.ix,
 		owner:    owner,
 		ixInode:  inode,
 		dirItems: make(map[string]btrfs.DirItem),
@@ -174,7 +176,7 @@ func (n *rescueNode) Lookup(out *fuse.Attr, name string,
 		owner = d.Location().ObjectID
 		inode = btrfs.FirstFreeObjectID
 	}
-	node := newRescueNode(n.ix, owner, inode)
+	node := newRescueNode(n.fs, owner, inode)
 	ch := n.Inode().NewChild(name, d.IsDir(), node)
 	return ch, node.GetAttr(out, nil, context)
 }
@@ -205,7 +207,7 @@ func (n *rescueNode) Open(flags uint32, context *fuse.Context) (
 			[]byte(e.Data()))), fuse.OK
 	}
 
-	if f := newExtentFile(n.ix, n.owner, n.ixInode); f != nil {
+	if f := newExtentFile(n.fs, n.owner, n.ixInode); f != nil {
 		return f, fuse.OK
 	}
 	return nil, fuse.ENOENT
@@ -232,7 +234,8 @@ func (n *rescueNode) ListXAttr(context *fuse.Context) ([]string, fuse.Status) {
 
 func (n *rescueNode) Readlink(c *fuse.Context) ([]byte, fuse.Status) {
 	// Link data is stored in inline extent.
-	if e := n.ix.FindExtentItem(n.owner, n.ixInode); e != nil && e.IsInline() {
+	if e := n.ix.FindFileExtentItem(n.owner, n.ixInode); e != nil &&
+		e.IsInline() {
 		return []byte(e.Data()), fuse.OK
 	}
 	return nil, fuse.ENODATA

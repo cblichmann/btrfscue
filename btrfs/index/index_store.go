@@ -32,6 +32,7 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"os"
+	"sort"
 	"strings"
 
 	"fmt"
@@ -86,6 +87,12 @@ var metadataKey = newIndexKey(^uint64(0), KL(), ^uint64(0))
 // incompatible changes.
 const metadataVersion = 20161109
 
+type stripeMapEntry struct {
+	logical uint64
+	devID   uint64
+	offset  uint64
+}
+
 // Index encapsulates metadata of a BTRFS to be recovered/analyzed. It uses
 // a memory-mapped key-value store to quickly access FS objects.
 // When opened read/write, concurrent access to this object must be guarded.
@@ -97,9 +104,11 @@ type Index struct {
 	// Number of inserts that are in flight in the current transaction
 	txNum      int
 	Generation uint64
+
+	stripeMap []stripeMapEntry
 }
 
-// Options sets options for opening a metdata index.
+// Options sets options for opening a metadata index.
 type Options struct {
 	ReadOnly   bool
 	BlockSize  uint
@@ -146,7 +155,6 @@ func OpenReadOnly(path string) (*Index, error) {
 	return openIndex(path, 0644 /* Mode */, nil)
 }
 
-//
 func openIndex(path string, m os.FileMode, o *Options) (*Index, error) {
 	if o == nil {
 		o = &Options{ReadOnly: true, Generation: ^uint64(0)}
@@ -396,6 +404,18 @@ func (ix *Index) FileExtentItems(owner, id uint64) (Range,
 	return ix.RangeAll(owner, btrfs.ExtentDataKey, id)
 }
 
+// Chunks returns an index range containing all of the chunk items.
+func (ix *Index) Chunks() (Range, btrfs.Chunk) {
+	return ix.RangeAll(btrfs.ChunkTreeObjectID, btrfs.ChunkItemKey,
+		btrfs.FirstFreeObjectID)
+}
+
+// Chunks returns an index range containing all of the chunk items.
+func (ix *Index) DevItems() (Range, btrfs.DevItem) {
+	return ix.RangeAll(btrfs.ChunkTreeObjectID, btrfs.DevItemKey,
+		btrfs.DevItemsObjectID)
+}
+
 // FindItem searches for an FS key at the latest generation smaller or equal
 // to the current index generation. If the index generation is smaller than
 // any existing generation, the data at the earliest generatation is returned.
@@ -411,20 +431,57 @@ func (ix *Index) FindInodeItem(owner uint64, inode uint64) btrfs.InodeItem {
 	return nil
 }
 
-func (ix *Index) FindExtentItem(owner uint64, id uint64) btrfs.FileExtentItem {
+func (ix *Index) FindFileExtentItem(owner uint64, id uint64) btrfs.FileExtentItem {
 	if i := ix.FindItem(owner, KF(btrfs.ExtentDataKey, id)); i != nil {
 		return i.Data()
 	}
 	return nil
 }
 
-//func (ix *Index) FindInodeRefItem(inode uint64) int {
-//	if i, end := ix.Range(KF(btrfs.InodeRefKey, inode),
-//		KL(btrfs.InodeRefKey, inode)); i < end {
-//		return i
-//	}
-//	return -1
-//}
+func (ix *Index) FindExtentItem(diskByteNr, diskNumBytes uint64) btrfs.ExtentItem {
+	if i := ix.FindItem(btrfs.ExtentTreeObjectID,
+		KF(btrfs.ExtentItemKey, diskByteNr, diskNumBytes)); i != nil {
+		return i.Data()
+	}
+	return nil
+}
+
+// Physical maps a filesystem logical address to a physical, on-disk address.
+// Note: No attempt is made to deal with "holes", missing chunk entries, or
+// logical addresses not mapping to any chunk.
+// Observation: If an FS only has a single device, in the current Linux
+// implementation, chunk logical addresses directly correspsond to stripe
+// physical addresses. In those cases, we don't even need the chunk tree.
+func (ix *Index) Physical(logical uint64) (devID uint64, offset uint64) {
+	if ix.stripeMap == nil {
+		ix.stripeMap = make([]stripeMapEntry, 0, 5 /* Initial capacity */)
+		for r, c := ix.Chunks(); r.HasNext(); c = r.Next() {
+			if c.NumStripes() == 0 {
+				// Invalid chunk, should always have at least one stripe
+				continue
+			}
+			s := c.Stripe(0)
+			ix.stripeMap = append(ix.stripeMap, stripeMapEntry{r.Key().Offset,
+				s.DevID(), s.Offset()})
+		}
+	}
+
+	stripeMapLen := len(ix.stripeMap)
+	// Index structure entries are sorted
+	i := sort.Search(stripeMapLen, func(i int) bool {
+		return ix.stripeMap[i].logical >= logical
+	})
+	if i == stripeMapLen || (i > 0 && ix.stripeMap[i].logical != logical) {
+		// Not found, adjust index value, as it's an insertion point (see
+		// documentation for sort.Search()). Unless i was 0, in which case the
+		// position is fine.
+		i--
+	}
+	e := ix.stripeMap[i]
+	// TODO(cblichmann): We can check for the failure case if we store the
+	//                   stripe length in the cache and do a range check here.
+	return e.devID, e.offset + logical - e.logical
+}
 
 // FindDirItemForPath finds the DirItem for a given FS path. It assumes that
 // the path is clean, as returned by path.Clean().
@@ -470,6 +527,7 @@ func (ix *Index) FindDirItemForPath(owner uint64, path string) btrfs.DirItem {
 }
 
 func (ix *Index) Experimental() {
+	return
 	var ik indexKey
 	var di btrfs.DirItem
 	var v []byte
@@ -502,7 +560,6 @@ func (ix *Index) Experimental() {
 
 	fmt.Println("-----------------------")
 
-	return
 	c := ix.bucket.Cursor()
 	fmt.Println("-----------------------")
 	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID), ix.Generation)
@@ -529,20 +586,6 @@ func (ix *Index) Experimental() {
 	if ik != nil {
 		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
 	}
-}
-
-func (ix *Index) Physical(logical uint64) (devID uint64, offset uint64) {
-	//if low, high := ix.Range(KF(btrfs.ChunkItemKey, btrfs.FirstChunkTreeObjectID),
-	//	KL(btrfs.ChunkItemKey, btrfs.FirstChunkTreeObjectID)); low < high {
-	//	if i := low + sort.Search(high-low, func(i int) bool {
-	//		i += low
-	//		return int64(logical-ix.Key(i).Offset) < int64(ix.Chunk(i).Length)
-	//	}); i < high {
-	//		stripe := ix.Chunk(i).Stripes[0]
-	//		return stripe.DevID, stripe.Offset + logical - ix.Key(i).Offset
-	//	}
-	//}
-	return
 }
 
 func keyFirst(k *btrfs.Key, args []uint64) {

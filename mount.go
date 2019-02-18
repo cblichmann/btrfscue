@@ -71,10 +71,11 @@ func (c *mountCommand) Run(args []string) {
 		}
 	}()
 	if len(args) == 2 {
-		dev, err = os.Open(args[1])
+		dev, err = os.Open(args[0])
 		cliutil.ReportError(err)
 	} else {
-		cliutil.Warnf("no device file given, only inline file data will be visible\n")
+		cliutil.Warnf("no device file given, only inline file data will be " +
+			"visible\n")
 	}
 
 	fs := rescuefs.New(*btrfscue.Metadata, ix, dev)

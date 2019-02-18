@@ -120,8 +120,9 @@ const (
 	MultipleObjectIDs = ^uint64(255) + 1
 
 	// All files have objectids in this range
-	FirstFreeObjectID      = 256
-	LastFreeObjectID       = ^uint64(256) + 1
+	FirstFreeObjectID = 256
+	LastFreeObjectID  = ^uint64(256) + 1
+
 	FirstChunkTreeObjectID = 256
 
 	// The device items go into the chunk tree. The key is in the form
@@ -415,7 +416,7 @@ const (
 	stripeDevID   = 0
 	stripeOffset  = stripeDevID + 8
 	stripeDevUUID = stripeOffset + 8
-	stripeEnd     = stripeDevID + uuid.UUIDSize
+	stripeEnd     = stripeDevUUID + uuid.UUIDSize
 )
 
 func (s Stripe) DevID() uint64      { return SliceUint64LE(s[stripeDevID:]) }
@@ -444,7 +445,9 @@ func (c Chunk) Length() uint64 { return SliceUint64LE(c[chunkLength:]) }
 func (c Chunk) Owner() uint64 { return SliceUint64LE(c[chunkOwner:]) }
 
 func (c Chunk) StripeLen() uint64 { return SliceUint64LE(c[chunkStripeLen:]) }
-func (c Chunk) Type() uint64      { return SliceUint64LE(c[chunkType:]) }
+
+// Type of this chunk. Reuses BlockGroupItem's Flags
+func (c Chunk) Type() uint64 { return SliceUint64LE(c[chunkType:]) }
 
 // Optimal IO alignment for this chunk
 func (c Chunk) IOAlign() uint32 { return SliceUint32LE(c[chunkIOAlign:]) }
@@ -461,14 +464,10 @@ func (c Chunk) NumStripes() uint16 { return SliceUint16LE(c[chunkNumStripes:]) }
 
 // Sub stripes only matter for raid10
 func (c Chunk) SubStripes() uint16 { return SliceUint16LE(c[chunkSubStripes:]) }
-func (c Chunk) Stripes() []Stripe {
-	// Do not limit the number of stripes we allocated here. Worst case is
-	// 64k stripes.
-	s := make([]Stripe, c.NumStripes())
-	for i := 0; i < len(s); i++ {
-		s[i] = Stripe(c[i*stripeEnd:])
-	}
-	return s
+
+// Stripe returns the ith stripe of this chunk.
+func (c Chunk) Stripe(i uint16) Stripe {
+	return Stripe(c[chunkStripes+i*stripeEnd:])
 }
 
 type InodeItem []byte
@@ -823,6 +822,7 @@ func (r RootRef) Name() string {
 const (
 	ExtentFlagData = 1 << iota
 	ExtentFlagTreeBlock
+	ExtentFlagFullBackref = 0x80
 )
 
 // Items in the extent btree are used to record the objectid of the
@@ -840,5 +840,7 @@ const (
 func (i ExtentItem) Refs() uint64       { return SliceUint64LE(i[extentItemRefs:]) }
 func (i ExtentItem) Generation() uint64 { return SliceUint64LE(i[extentItemGeneration:]) }
 func (i ExtentItem) Flags() uint64      { return SliceUint64LE(i[extentItemFlags:]) }
+
+// TODO(cblichmann): btrfs_tree_block_info when Flags == ExtentFlagFullBackref
 
 func (i ExtentItem) IsCompatV0() bool { return len(i) < 8+8+8 }

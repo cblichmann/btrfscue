@@ -41,7 +41,8 @@ import (
 type rescueFS struct {
 	metadata string
 	ix       *index.Index
-	dev      io.ReaderAt
+
+	dev io.ReaderAt
 
 	root   *basicNode
 	server *fuse.Server

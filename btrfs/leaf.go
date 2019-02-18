@@ -82,7 +82,7 @@ const (
 func (i Item) Key() Key       { return SliceKey(i[itemKey:]) }
 func (i Item) Offset() uint32 { return SliceUint32LE(i[itemOffset:]) }
 func (i Item) Size() uint32   { return SliceUint32LE(i[itemSize:]) }
-func (i Item) Data() []byte   { return i[ItemLen:] }
+func (i Item) Data() []byte   { return i[ItemLen : ItemLen+i.Size()] }
 
 type Leaf []byte
 

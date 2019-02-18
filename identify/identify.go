@@ -110,14 +110,14 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 
 	filename := args[0]
-	f, err := os.Open(filename)
+	dev, err := os.Open(filename)
 	cliutil.ReportError(err)
-	defer f.Close()
+	defer dev.Close()
 
 	bs := uint64(*btrfscue.BlockSize)
 
 	// Get total file/device size
-	devSize, err := btrfs.CheckDeviceSize(f, bs)
+	devSize, err := btrfs.CheckDeviceSize(dev, bs)
 	cliutil.ReportError(err)
 
 	// Parse sampleFraction * 100% of all blocks (minimum minBlocks, up to
@@ -145,7 +145,7 @@ func (ic *identifyCommand) Run(args []string) {
 	coll := FSIDCollecter{}
 	for i, offset := range samples {
 		bar.Set(i + 1)
-		cliutil.ReportError(ioutil.ReadBlockAt(f, buf, offset, bs))
+		cliutil.ReportError(ioutil.ReadBlockAt(dev, buf, offset, bs))
 		coll.CollectBlock(buf)
 	}
 	bar.Finish()
