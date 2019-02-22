@@ -10,3 +10,6 @@
 [submodule "vendor/github.com/etcd-io/bbolt"]
 	path = vendor/github.com/etcd-io/bbolt
 	url = https://github.com/etcd-io/bbolt.git
+[submodule "vendor/golang.org/x/sys"]
+	path = vendor/golang.org/x/sys
+	url = https://go.googlesource.com/sys
