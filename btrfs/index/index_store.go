@@ -30,6 +30,7 @@ package index // import "blichmann.eu/code/btrfscue/btrfs/index"
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"os"
 	"sort"
@@ -44,48 +45,17 @@ import (
 
 func init() { fmt.Printf("") } //DBG!!!
 
-// indexKey holds the BTRFS key of an owned FS object as well as its
-// generation. The tuple (owner, Key, generation) is encoded in big endian for
-// lexicographical comparison.
-type indexKey []byte
-
-// Offsets for parsing from byte slice
-const (
-	indexKeyOwner      = 0
-	indexKeyType       = indexKeyOwner + 8
-	indexKeyObjectID   = indexKeyType + 1
-	indexKeyOffset     = indexKeyObjectID + 8
-	indexKeyGeneration = indexKeyOffset + 8
-	indexKeyEnd        = indexKeyGeneration + 8
-)
-
-func newIndexKey(owner uint64, k btrfs.Key, generation uint64) indexKey {
-	ik := [indexKeyEnd]byte{}
-	binary.BigEndian.PutUint64(ik[indexKeyOwner:], owner)
-	ik[indexKeyType] = k.Type
-	binary.BigEndian.PutUint64(ik[indexKeyObjectID:], k.ObjectID)
-	binary.BigEndian.PutUint64(ik[indexKeyOffset:], k.Offset)
-	binary.BigEndian.PutUint64(ik[indexKeyGeneration:], generation)
-	return ik[:]
-}
-
-func (ik indexKey) Owner() uint64      { return binary.BigEndian.Uint64(ik[indexKeyOwner:]) }
-func (ik indexKey) Type() uint8        { return uint8(ik[indexKeyType]) }
-func (ik indexKey) ObjectID() uint64   { return binary.BigEndian.Uint64(ik[indexKeyObjectID:]) }
-func (ik indexKey) Offset() uint64     { return binary.BigEndian.Uint64(ik[indexKeyOffset:]) }
-func (ik indexKey) Generation() uint64 { return binary.BigEndian.Uint64(ik[indexKeyGeneration:]) }
-func (ik indexKey) Key() btrfs.Key {
-	return btrfs.Key{ObjectID: ik.ObjectID(), Type: ik.Type(), Offset: ik.Offset()}
-}
-
 // Fake FS key used for metadata. Also acts as a sentinel value for
 // non-existing FS objects. Since it always sorts lexicographically last,
 // Seek() on the "index" bucket will never return nil.
 var metadataKey = newIndexKey(^uint64(0), KL(), ^uint64(0))
 
-// Index metadata version. Set to ISO date (decimal) whenever there are
-// incompatible changes.
-const metadataVersion = 20161109
+const (
+	// Index metadata version. Set to ISO date (decimal) whenever there are
+	// incompatible changes.
+	MetadataVersion           = 20190809 // V2: Put generation first (decending) in key
+	MetadataVersionUpgradable = 20161109 // V1: Orignal format using Boltdb
+)
 
 type stripeMapEntry struct {
 	logical uint64
@@ -110,10 +80,11 @@ type Index struct {
 
 // Options sets options for opening a metadata index.
 type Options struct {
-	ReadOnly   bool
-	BlockSize  uint
-	FSID       uuid.UUID
-	Generation uint64
+	ReadOnly        bool
+	BlockSize       uint
+	FSID            uuid.UUID
+	Generation      uint64
+	AllowOldVersion bool
 }
 
 type indexMetadata []byte
@@ -129,7 +100,7 @@ const (
 
 func newIndexMetadata(o *Options) indexMetadata {
 	m := [indexMetadataEnd]byte{}
-	binary.LittleEndian.PutUint64(m[indexMetadataVersion:], metadataVersion)
+	binary.LittleEndian.PutUint64(m[indexMetadataVersion:], MetadataVersion)
 	binary.LittleEndian.PutUint32(m[indexMetadataBlockSize:], uint32(
 		o.BlockSize))
 	copy(m[indexMetadataFSID:], o.FSID[:])
@@ -147,7 +118,7 @@ func Open(path string, m os.FileMode, o *Options) (*Index, error) {
 	return openIndex(path, m, o)
 }
 
-// OpenIndexReadOnly opens a metadata index for reading/querying.
+// OpenReadOnly opens a metadata index for reading/querying.
 func OpenReadOnly(path string) (*Index, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
@@ -165,10 +136,8 @@ func openIndex(path string, m os.FileMode, o *Options) (*Index, error) {
 		ReadOnly: o.ReadOnly}); err != nil {
 		return nil, err
 	}
-	if !o.ReadOnly {
-		if err = ix.checkUpdateMetadata(o); err != nil {
-			return nil, err
-		}
+	if err = ix.checkUpdateMetadata(o); err != nil {
+		return nil, err
 	}
 	if err = ix.ensureTx(!o.ReadOnly); err != nil {
 		return nil, err
@@ -177,23 +146,38 @@ func openIndex(path string, m os.FileMode, o *Options) (*Index, error) {
 }
 
 func (ix *Index) checkUpdateMetadata(o *Options) error {
-	return ix.db.Update(func(tx *bbolt.Tx) error {
+	fn := ix.db.Update
+	if o.ReadOnly {
+		fn = ix.db.View
+	}
+	return fn(func(tx *bbolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte("index"))
 		if err != nil {
 			return err
 		}
 		m := indexMetadata(bucket.Get(metadataKey))
 		if m == nil {
-			// No metadata yet, set current
+			if o.ReadOnly {
+				return errors.New("no index in metadata")
+			}
+			// No index yet, set current
 			if err = bucket.Put(metadataKey, newIndexMetadata(o)); err != nil {
 				return err
 			}
 			return nil
 		}
 
-		if m.Version() > metadataVersion {
+		if !o.AllowOldVersion && m.Version() < MetadataVersion {
+			return fmt.Errorf("metadata version v%d too old, upgrade using "+
+				"upgrade-index", m.Version())
+		}
+		if m.Version() > MetadataVersion {
 			return fmt.Errorf("incompatible metadata, expected v%d got: v%d",
-				metadataVersion, m.Version())
+				MetadataVersion, m.Version())
+		}
+		if o.AllowOldVersion {
+			// Skip other checks if we're upgrading
+			return nil
 		}
 		if m.BlockSize() != uint32(o.BlockSize) {
 			return fmt.Errorf("block size mismatch, expected %d got: %d",
@@ -207,7 +191,15 @@ func (ix *Index) checkUpdateMetadata(o *Options) error {
 }
 
 // Close closes the index and its underlying bbolt database.
-func (ix *Index) Close() { ix.db.Close() }
+func (ix *Index) Close() {
+	// Make sure writable and read-only transactions are completed.
+	if !ix.db.IsReadOnly() {
+		ix.Commit()
+	} else {
+		ix.tx.Rollback()
+	}
+	ix.db.Close()
+}
 
 func (ix *Index) ensureTx(writable bool) error {
 	var err error
@@ -261,47 +253,66 @@ func (ix *Index) Commit() error {
 	return err
 }
 
+// RawTx executes a transaction function on underlying BoltDB database. This
+// is an advanced feature that should not be called in regular operation. It
+// is used by the upgrade-index sub-command, for example, to upgrade legacy
+// metadata indices.
+// This function requires that the index was opened read-write. It behaves
+// similar to bbolt.Update() otherwise.
+func (ix *Index) RawTx(fn func(db *bbolt.DB, tx *bbolt.Tx,
+	bucket *bbolt.Bucket) error) error {
+	if err := ix.ensureTx(true); err != nil {
+		return err
+	}
+	if err := fn(ix.db, ix.tx, ix.bucket); err != nil {
+		return err
+	}
+	return ix.Commit()
+}
+
 // lowerBound finds an FS key under a given owner and only up to a prefix
-// length. This ignores the generation number.
+// length. It find the key with the highest generation number smaller than or
+// equal to the index generation.
 // For example, to search for (256 DIR_INDEX ?) owned by the FS tree object:
-//   lowerBound(FSTreeObjectID, KF(DIR_INDEX, 256), indexKeyOffset)
-func lowerBound(c *bbolt.Cursor, owner uint64, k btrfs.Key,
+//   lowerBound(FSTreeObjectID, KF(DIR_INDEX, 256), keyV2Offset)
+func lowerBound(c *bbolt.Cursor, owner uint64, k btrfs.Key, gen uint64,
 	prefix int) btrfs.Key {
-	var found indexKey
-	search := newIndexKey(owner, k, 0)
-	if found, _ = c.Seek(search[:prefix]); bytes.Equal(found[:prefix],
-		search[:prefix]) {
-		return found.Key()
+	var cur, next keyV2
+	search := newIndexKey(owner, k, 0)[:prefix]
+	for cur, _ = c.Seek(search); bytes.Equal(cur[:prefix], search); cur = next {
+		next, _ = c.Next()
+		if bytes.Equal(next[:prefix], search) && next.Generation() >= gen {
+			return cur.Key()
+		}
 	}
 	return KL()
 }
 
 func find(c *bbolt.Cursor, owner uint64, k btrfs.Key, generation uint64) (
-	indexKey, btrfs.Item) {
+	keyV2, btrfs.Item) {
 	search := newIndexKey(owner, k, generation)
-	var found indexKey
+	var found keyV2
 	found, v := c.Seek(search)
-	if bytes.Compare(found[:indexKeyGeneration],
-		search[:indexKeyGeneration]) <= 0 {
+	if bytes.Compare(found[:keyV2Generation],
+		search[:keyV2Generation]) <= 0 {
 		return found, v
 	}
 	if found, v = c.Prev(); len(found) > 0 && bytes.Equal(
-		found[:indexKeyGeneration], search[:indexKeyGeneration]) {
+		found[:keyV2Generation], search[:keyV2Generation]) {
 		return found, v
 	}
 	return nil, nil
 }
 
-func findNext(c *bbolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
+func findNext(c *bbolt.Cursor, ik, end keyV2) (keyV2, btrfs.Item) {
 	search := newIndexKey(ik.Owner(), ik.Key(), ^uint64(0))
-	var found indexKey
+	var found keyV2
 	if found, _ = c.Seek(search); found != nil {
 		search = newIndexKey(ik.Owner(), found.Key(), ik.Generation())
 		var v btrfs.Item
 		if found, v = c.Seek(search); bytes.Compare(found, search) <= 0 {
 			return found, v
 		} else if end != nil && bytes.Compare(found, end) <= 0 {
-			//fmt.Println("!", found.Owner(), found.Key(), found.Generation(), "-", search.Owner(), search.Key(), search.Generation())
 			return found, v
 		}
 	}
@@ -314,7 +325,7 @@ func findNext(c *bbolt.Cursor, ik, end indexKey) (indexKey, btrfs.Item) {
 type Range struct {
 	ix       *Index
 	cursor   *bbolt.Cursor
-	key, end indexKey
+	key, end keyV2
 	value    btrfs.Item
 }
 
@@ -327,7 +338,7 @@ func (r *Range) HasNext() bool {
 
 func (r *Range) Next() []byte {
 	if r.key, r.value = findNext(r.cursor, r.key, nil); r.key != nil {
-		return btrfs.Item(r.value).Data()
+		return r.value.Data()
 	}
 	return nil
 }
@@ -337,14 +348,15 @@ func (r *Range) Key() btrfs.Key     { return r.key.Key() }
 func (r *Range) Generation() uint64 { return r.key.Generation() }
 func (r *Range) Item() btrfs.Item   { return r.value }
 
-// Range returns an index range [low, high) for the given keys.
+// Range returns an index range [first, last) for the given keys.
 func (ix *Index) Range(owner uint64, first, last btrfs.Key) (Range, []byte) {
 	r := Range{
 		ix:     ix,
 		cursor: ix.bucket.Cursor(),
 		end:    newIndexKey(owner, last, ix.Generation),
 	}
-	lowerFirst := lowerBound(r.cursor, owner, first, indexKeyOffset)
+	lowerFirst := lowerBound(r.cursor, owner, first, ix.Generation,
+		keyV2Offset)
 	r.key, r.value = find(r.cursor, owner, lowerFirst, ix.Generation)
 	if r.key != nil {
 		return r, r.value.Data()
@@ -362,14 +374,15 @@ type FullRange struct {
 }
 
 func (r *FullRange) Next() []byte {
-	if r.key, r.value = findNext(r.cursor, r.key, r.end); r.key != nil {
-		return btrfs.Item(r.value).Data()
+	if r.key, r.value = r.cursor.Next(); r.key != nil && !bytes.Equal(r.key,
+		r.end) {
+		return r.value.Data()
 	}
 	return nil
 }
 
-// FullRange returns an index range for all items in the index. This is
-// mainly useful for debugging.
+// FullRange returns an index range for all items in the index regardless of
+// generation. This is mainly useful for debugging.
 func (ix *Index) FullRange() (FullRange, []byte) {
 	r := FullRange{Range{
 		ix:     ix,
@@ -410,7 +423,7 @@ func (ix *Index) Chunks() (Range, btrfs.Chunk) {
 		btrfs.FirstFreeObjectID)
 }
 
-// Chunks returns an index range containing all of the chunk items.
+// DevItems returns an index range containing all of the device items.
 func (ix *Index) DevItems() (Range, btrfs.DevItem) {
 	return ix.RangeAll(btrfs.ChunkTreeObjectID, btrfs.DevItemKey,
 		btrfs.DevItemsObjectID)
@@ -449,9 +462,6 @@ func (ix *Index) FindExtentItem(diskByteNr, diskNumBytes uint64) btrfs.ExtentIte
 // Physical maps a filesystem logical address to a physical, on-disk address.
 // Note: No attempt is made to deal with "holes", missing chunk entries, or
 // logical addresses not mapping to any chunk.
-// Observation: If an FS only has a single device, in the current Linux
-// implementation, chunk logical addresses directly correspsond to stripe
-// physical addresses. In those cases, we don't even need the chunk tree.
 func (ix *Index) Physical(logical uint64) (devID uint64, offset uint64) {
 	if ix.stripeMap == nil {
 		ix.stripeMap = make([]stripeMapEntry, 0, 5 /* Initial capacity */)
@@ -461,8 +471,11 @@ func (ix *Index) Physical(logical uint64) (devID uint64, offset uint64) {
 				continue
 			}
 			s := c.Stripe(0)
-			ix.stripeMap = append(ix.stripeMap, stripeMapEntry{r.Key().Offset,
-				s.DevID(), s.Offset()})
+			ix.stripeMap = append(ix.stripeMap, stripeMapEntry{
+				logical: r.Key().Offset,
+				devID:   s.DevID(),
+				offset:  s.Offset()})
+			fmt.Printf("stripe: %d => %d @ %d\n", r.Key().Offset, s.Offset(), r.Generation())
 		}
 	}
 
@@ -477,10 +490,10 @@ func (ix *Index) Physical(logical uint64) (devID uint64, offset uint64) {
 		// position is fine.
 		i--
 	}
-	e := ix.stripeMap[i]
+	s := ix.stripeMap[i]
 	// TODO(cblichmann): We can check for the failure case if we store the
 	//                   stripe length in the cache and do a range check here.
-	return e.devID, e.offset + logical - e.logical
+	return s.devID, s.offset + logical - s.logical
 }
 
 // FindDirItemForPath finds the DirItem for a given FS path. It assumes that
@@ -524,68 +537,6 @@ func (ix *Index) FindDirItemForPath(owner uint64, path string) btrfs.DirItem {
 		}
 	}
 	return result
-}
-
-func (ix *Index) Experimental() {
-	return
-	var ik indexKey
-	var di btrfs.DirItem
-	var v []byte
-	_ = ik
-	_ = di
-
-	for r, v := ix.Subvolumes(); r.HasNext(); v = r.Next() {
-		fmt.Printf("ID %d gen %d top level %d path \n", r.Key().ObjectID, v.Generation(), v.Level())
-	}
-
-	fmt.Println("-----------------------")
-	dirID := uint64(256)
-	for r, v := ix.DirItems(btrfs.FSTreeObjectID, dirID); r.HasNext(); v = r.Next() {
-		fmt.Printf("%d %s %d %s ", r.Owner(), r.Key(), r.Generation(), v.Name())
-		if v.IsSubvolume() {
-			fmt.Printf("subvol %s", v.Location())
-		} else {
-			fmt.Printf("%s", v.Location())
-			if ii := ix.FindInodeItem(r.Owner(), v.Location().ObjectID); ii != nil {
-				fmt.Printf("%d", ii.Size())
-			}
-		}
-		fmt.Println()
-	}
-	fmt.Println("-----------------------")
-	di = ix.FindDirItemForPath(btrfs.FSTreeObjectID, "z0-subvolume-03-aaaaaaaa/z0-subvolume-04-bbbbbbbb/demo/jpda/src.zip")
-	if di != nil {
-		fmt.Println(di.Name())
-	}
-
-	fmt.Println("-----------------------")
-
-	c := ix.bucket.Cursor()
-	fmt.Println("-----------------------")
-	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID), ix.Generation)
-	if ik != nil {
-		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
-	}
-	fmt.Println("-----------------------")
-	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID), ^uint64(0))
-	if ik != nil {
-		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
-	}
-	fmt.Println("-----------------------")
-	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID), 0)
-	if ik != nil {
-		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
-	}
-	fmt.Println("-----------------------")
-	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, btrfs.FirstFreeObjectID+1), 0)
-	if ik != nil {
-		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
-	}
-	fmt.Println("-----------------------")
-	ik, v = find(c, btrfs.RootTreeObjectID, KF(btrfs.RootItemKey, 320), 5)
-	if ik != nil {
-		fmt.Println("  ", ik.Key(), ik.Generation(), btrfs.Item(v).Key(), btrfs.RootItem(v[btrfs.ItemLen:]).RootDirID())
-	}
 }
 
 func keyFirst(k *btrfs.Key, args []uint64) {

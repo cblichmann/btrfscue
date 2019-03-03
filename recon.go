@@ -127,7 +127,6 @@ func (c *reconCommand) Run(args []string) {
 	bar.Set64(int64(devSize))
 
 	bar.Finish()
-	ix.Experimental()
 }
 
 func init() {
