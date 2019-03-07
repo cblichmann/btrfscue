@@ -108,3 +108,7 @@ deb: debsource $(binaries)
 debclean: clean
 	@echo "  [Deb-Clean] Removing artifacts"
 	@debuild -- clean
+
+rpm: $(binaries)
+	@echo "  [RPMBUILD] Building package"
+	@rpmbuild -bb rpmbuild/SPECS/rpm.spec --define "_topdir $(this_dir)/rpmbuild"
