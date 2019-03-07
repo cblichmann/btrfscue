@@ -92,8 +92,9 @@ You may want to create a symlink to the binary somewhere in your path.
 Packages
 --------
 
-At the moment, only building Debian packages is supported. Just run `make deb`
-to build.
+At the moment, only building Debian ans RPM packages is supported.
+Just run `make deb` to build a debian package or sh buildrpm.sh to
+build a RPM package.
 
 
 Usage
