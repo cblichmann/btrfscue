@@ -56,6 +56,7 @@ Requirements
   - Go 1.8 or higher
   - Git version 1.7 or later
   - Optional: CDBS (to build the Debian packages)
+  - Optional: build-rpm (to build the RPM package)
   - Optional: GNU Make
 
 
@@ -92,8 +93,8 @@ You may want to create a symlink to the binary somewhere in your path.
 Packages
 --------
 
-At the moment, only building Debian ans RPM packages is supported.
-Just run `make deb` to build a debian package or sh buildrpm.sh to
+At the moment, only building Debian and RPM packages is supported.
+Just run `make deb` to build a debian package or sh `make rpm` to
 build a RPM package.
 
 
