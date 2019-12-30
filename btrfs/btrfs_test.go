@@ -1,6 +1,6 @@
 /*
- * btrfscue version 0.5
- * Copyright (c)2011-2019 Christian Blichmann
+ * btrfscue version 0.6
+ * Copyright (c)2011-2020 Christian Blichmann
  *
  * Tests for the utility functions of the FS structures package
  *

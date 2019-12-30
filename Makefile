@@ -1,7 +1,7 @@
 #!/usr/bin/env make
 #
-# btrfscue version 0.5
-# Copyright (c)2011-2019 Christian Blichmann
+# btrfscue version 0.6
+# Copyright (c)2011-2020 Christian Blichmann
 #
 # Makefile for POSIX compatible systems
 #
@@ -26,7 +26,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 # Source Configuration
-version = 0.5
+version = 0.6
+c_year ?= $(shell date +%Y)
 go_package = blichmann.eu/code/btrfscue
 go_programs = btrfscue
 source_only_tgz = ../btrfscue_$(version).orig.tar.xz
@@ -82,9 +83,9 @@ updatesourcemeta:
 		$(this_dir)/Makefile \
 		$(this_dir)/README.md; \
 	do \
-		sed -i \
+		[ -f $$i ] && sed -i \
 			-e 's/\(btrfscue version\) [0-9]\+\.[0-9]\+/\1 $(version)/' \
-			-e 's/\(Copyright (c)[0-9]\+\)-[0-9]\+/\1-$(shell date +%Y)/' \
+			-e 's/\(Copyright (c)[0-9]\+\)-[0-9]\+/\1-$(c_year)/' \
 			$$i; \
 	done
 
