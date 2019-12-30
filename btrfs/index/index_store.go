@@ -150,10 +150,16 @@ func (ix *Index) checkUpdateMetadata(o *Options) error {
 	if o.ReadOnly {
 		fn = ix.db.View
 	}
-	return fn(func(tx *bbolt.Tx) error {
-		bucket, err := tx.CreateBucketIfNotExists([]byte("index"))
-		if err != nil {
-			return err
+	return fn(func(tx *bbolt.Tx) (err error) {
+		indexName := []byte("index")
+		bucket := tx.Bucket(indexName)
+		if bucket == nil {
+			if o.ReadOnly {
+				return errors.New("no index in metadata")
+			}
+			if bucket, err = tx.CreateBucket(indexName); err != nil {
+				return err
+			}
 		}
 		m := indexMetadata(bucket.Get(metadataKey))
 		if m == nil {
@@ -175,8 +181,9 @@ func (ix *Index) checkUpdateMetadata(o *Options) error {
 			return fmt.Errorf("incompatible metadata, expected v%d got: v%d",
 				MetadataVersion, m.Version())
 		}
-		if o.AllowOldVersion {
-			// Skip other checks if we're upgrading
+		if o.AllowOldVersion || o.ReadOnly {
+			// Skip other checks if we're upgrading. Also skip if read-only.
+			// Metadata will be read from file in this case.
 			return nil
 		}
 		if m.BlockSize() != uint32(o.BlockSize) {
@@ -188,6 +195,10 @@ func (ix *Index) checkUpdateMetadata(o *Options) error {
 		}
 		return nil
 	})
+}
+
+func (ix *Index) Metadata() indexMetadata {
+	return indexMetadata(ix.bucket.Get(metadataKey))
 }
 
 // Close closes the index and its underlying bbolt database.

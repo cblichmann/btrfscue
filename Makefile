@@ -56,7 +56,7 @@ $(binaries): $(sources)
 	@go install -tags "$(TAGS)" $(go_package)
 
 .PHONY: test
-test: $(binaries)
+test:
 	@echo "  [Test]"
 	@go test ./...
 
