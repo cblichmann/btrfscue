@@ -32,7 +32,7 @@ import (
 	"io"
 	"os"
 
-	"gopkg.in/cheggaaa/pb.v1"
+	"github.com/cheggaaa/pb/v3"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
@@ -91,7 +91,7 @@ func (c *reconCommand) Run(args []string) {
 		ix.Close()
 	}()
 
-	bar := pb.New64(int64(devSize)).SetUnits(pb.U_BYTES)
+	bar := pb.New64(int64(devSize)) //.SetUnits(pb.U_BYTES)
 	bar.SetMaxWidth(120)
 	bar.Start()
 	defer bar.Finish()
@@ -103,7 +103,7 @@ func (c *reconCommand) Run(args []string) {
 		} else if err != nil {
 			cliutil.ReportError(err)
 		}
-		bar.Set64(int64(off))
+		bar.SetCurrent(int64(off))
 		l := btrfs.Leaf(buf)
 		h := l.Header()
 
@@ -124,7 +124,7 @@ func (c *reconCommand) Run(args []string) {
 				l.Data(i)))
 		}
 	}
-	bar.Set64(int64(devSize))
+	bar.SetCurrent(int64(devSize))
 
 	bar.Finish()
 }

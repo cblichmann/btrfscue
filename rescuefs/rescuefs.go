@@ -32,8 +32,8 @@ package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
 import (
 	"io"
 
-	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/hanwen/go-fuse/v2/fuse/nodefs"
 
 	"blichmann.eu/code/btrfscue/btrfs/index"
 )

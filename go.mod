@@ -3,10 +3,11 @@ module blichmann.eu/code/btrfscue
 go 1.11
 
 require (
+	github.com/cheggaaa/pb/v3 v3.0.3
 	github.com/etcd-io/bbolt v1.3.3
-	github.com/hanwen/go-fuse v1.0.0
+	github.com/hanwen/go-fuse/v2 v2.0.2
 	github.com/mattn/go-runewidth v0.0.7
 	go.etcd.io/bbolt v1.3.3
-	golang.org/x/sys v0.0.0-20180830151530-49385e6e1522
+	golang.org/x/sys v0.0.0-20191228213918-04cbcbbfeed8
 	gopkg.in/cheggaaa/pb.v1 v1.0.28
 )

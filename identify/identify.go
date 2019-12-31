@@ -36,7 +36,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"gopkg.in/cheggaaa/pb.v1"
+	"github.com/cheggaaa/pb/v3"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfscue"
@@ -144,7 +144,7 @@ func (ic *identifyCommand) Run(args []string) {
 	buf := make([]byte, bs)
 	coll := FSIDCollecter{}
 	for i, offset := range samples {
-		bar.Set(i + 1)
+		bar.SetCurrent(int64(i + 1))
 		cliutil.ReportError(ioutil.ReadBlockAt(dev, buf, offset, bs))
 		coll.CollectBlock(buf)
 	}

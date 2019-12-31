@@ -37,10 +37,9 @@ this_dir := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 bin_dir := $(this_dir)/bin
 
 export GOBIN := $(bin_dir)
-undefine GOPATH
 
 binaries := $(addprefix $(bin_dir)/,$(go_programs))
-sources := $(wildcard $(shell go list -f '{{.Dir}}/*.go' ./...))
+sources := $(wildcard $(shell (unset GOPATH; go list -f '{{.Dir}}/*.go' ./...)))
 
 .PHONY: all
 all: $(binaries)
@@ -53,12 +52,12 @@ clean:
 
 $(binaries): $(sources)
 	@echo "  [Build]     $@"
-	@go install -tags "$(TAGS)" $(go_package)
+	@(unset GOPATH; go install -tags "$(TAGS)" $(go_package))
 
 .PHONY: test
 test:
 	@echo "  [Test]"
-	@go test ./...
+	@(unset GOPATH; go test ./...)
 
 $(source_only_tgz): clean
 	@echo "  [Archive]   $@"

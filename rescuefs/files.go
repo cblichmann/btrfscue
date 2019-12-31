@@ -31,8 +31,8 @@ package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
 
 import (
 	"blichmann.eu/code/btrfscue/cliutil"
-	"github.com/hanwen/go-fuse/fuse"
-	"github.com/hanwen/go-fuse/fuse/nodefs"
+	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/hanwen/go-fuse/v2/fuse/nodefs"
 )
 
 // Similar to stripeMapEntry in Index.Physical()
