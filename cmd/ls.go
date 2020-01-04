@@ -25,10 +25,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package cmd // import "blichmann.eu/code/btrfscue/cmd"
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,11 +36,12 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/subcommand"
 )
 
 func dirItemTypeString(t uint8) string {
@@ -138,27 +138,40 @@ func listDirectory(w io.Writer, ix *index.Index, owner, dirID uint64,
 	}
 }
 
-type lsCommand struct {
-	recursive bool
-	inode     bool
+type listFilesOptions struct {
+	Recursive bool
+	Inode     bool
 }
 
-func (c *lsCommand) DefineFlags(fs *flag.FlagSet) {
-	fs.BoolVar(&c.recursive, "recursive", false,
+func init() {
+	options := listFilesOptions{}
+	lsCmd := &cobra.Command{
+		Use: "ls",
+		Short: "list information about files, directories and " +
+			"subvolumes/snapshots",
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(btrfscue.Options.Metadata) == 0 {
+				cliutil.Fatalf("missing metadata option\n")
+			}
+			doListFiles(args, btrfscue.Options.Metadata, options)
+		},
+	}
+
+	fs := lsCmd.PersistentFlags()
+	fs.BoolVar(&options.Recursive, "recursive", false,
 		"recurse into sub-directories")
-	fs.BoolVar(&c.inode, "inode", false,
+	fs.BoolVar(&options.Inode, "inode", false,
 		"show inode numbers")
+
+	rootCmd.AddCommand(lsCmd)
 }
 
-func (c *lsCommand) Run(args []string) {
+func doListFiles(args []string, metadata string, options listFilesOptions) {
 	if len(args) == 0 {
 		args = append(args, "/")
 	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
 
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
+	ix, err := index.OpenReadOnly(btrfscue.Options.Metadata)
 	cliutil.ReportError(err)
 	defer ix.Close()
 
@@ -179,7 +192,7 @@ func (c *lsCommand) Run(args []string) {
 			cliutil.Warnf("cannot lookup '%s': No such file or directory\n", p)
 			continue
 		} else if !di.IsDir() {
-			listDirItem(w, ix, owner, di, c.inode)
+			listDirItem(w, ix, owner, di, options.Inode)
 			continue
 		} else {
 			todo = append(todo, Todo{owner, di.Location().ObjectID})
@@ -189,13 +202,7 @@ func (c *lsCommand) Run(args []string) {
 
 	w = tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
 	for _, t := range todo {
-		listDirectory(w, ix, t.owner, t.dirID, c.recursive, c.inode)
+		listDirectory(w, ix, t.owner, t.dirID, options.Recursive, options.Inode)
 	}
 	w.Flush()
-}
-
-func init() {
-	subcommand.Register("ls",
-		"list information about files, directories and subvolumes/snapshots",
-		&lsCommand{})
 }

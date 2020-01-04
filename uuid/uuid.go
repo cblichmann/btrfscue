@@ -80,3 +80,5 @@ func (u *UUID) Set(value string) error {
 	copy(u[:], b)
 	return nil
 }
+
+func (u UUID) Type() string { return "string" }

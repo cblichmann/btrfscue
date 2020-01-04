@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Sub-command to dump the index contents.
+ * Identify sub-command
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,51 +25,36 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package cmd // import "blichmann.eu/code/btrfscue/cmd"
 
 import (
-	"flag"
-	"fmt"
-
-	_ "blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/subcommand"
+	"blichmann.eu/code/btrfscue/identify"
+
+	"github.com/spf13/cobra"
 )
 
-type dumpIndexCommand struct {
-}
-
-func (c *dumpIndexCommand) DefineFlags(fs *flag.FlagSet) {
-}
-
-func (c *dumpIndexCommand) Run(args []string) {
-	if len(args) > 0 {
-		cliutil.Fatalf("extra operand: %s\n", args[0])
-	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
-	cliutil.ReportError(err)
-	defer ix.Close()
-
-	last := ^uint64(0)
-	for r, v := ix.FullRange(); r.HasNext(); v = r.Next() {
-		if o := r.Owner(); o != last {
-			fmt.Printf("owner %d\n", o)
-			last = o
-		}
-		k := r.Key()
-		fmt.Printf("%s @ %d\n", k, r.Generation())
-		_ = v
-	}
-}
-
 func init() {
-	subcommand.Register("dump-index",
-		"for debugging, dump the index in text format",
-		&dumpIndexCommand{})
+	options := identify.IdentifyFSOptions{}
+	identifyCmd := &cobra.Command{
+		Use:   "identify",
+		Short: "identify a BTRFS filesystem on a device",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			options.BlockSize = btrfscue.Options.BlockSize
+			identify.IdentifyFS(args[0], options)
+		},
+	}
+
+	fs := identifyCmd.PersistentFlags()
+	fs.Float64Var(&options.SampleFraction, "sample-fraction", 0.0001,
+		"fraction of blocks to sample for filesystem ids")
+	fs.UintVar(&options.MinBlocks, "min-blocks", 1000,
+		"minimum number of blocks to scan")
+	fs.UintVar(&options.MaxBlocks, "max-blocks", 1000000,
+		"maximum number of blocks to scan")
+	fs.UintVar(&options.MinOccurrence, "min-occurrence", 4,
+		"number of occurrences of an id required to report a filesystem")
+
+	rootCmd.AddCommand(identifyCmd)
 }

@@ -25,54 +25,59 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package cmd // import "blichmann.eu/code/btrfscue/cmd"
 
 import (
-	"flag"
 	"io"
 	"os"
 
 	"github.com/cheggaaa/pb/v3"
+	"github.com/spf13/cobra"
 
 	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
 	"blichmann.eu/code/btrfscue/ioutil"
-	"blichmann.eu/code/btrfscue/subcommand"
 	"blichmann.eu/code/btrfscue/uuid"
 )
 
-type reconCommand struct {
+type scanFSOptions struct {
 	id     uuid.UUID
 	append bool
 }
 
-func (c *reconCommand) DefineFlags(fs *flag.FlagSet) {
-	fs.Var(&c.id, "id", "UUID of the filesystem (see identify)")
-	fs.BoolVar(&c.append, "append", false, "append to metadata file")
+func init() {
+	options := scanFSOptions{}
+	reconCmd := &cobra.Command{
+		Use:   "recon",
+		Short: "gather metadata for later use",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(btrfscue.Options.Metadata) == 0 {
+				cliutil.Fatalf("missing metadata option\n")
+			}
+			doScanFS(args[0], btrfscue.Options.Metadata, options)
+		},
+	}
+
+	fs := reconCmd.PersistentFlags()
+	fs.Var(&options.id, "id", "UUID of the filesystem (see identify)")
+	fs.BoolVar(&options.append, "append", false, "append to metadata file")
+
+	rootCmd.AddCommand(reconCmd)
 }
 
-func (c *reconCommand) Run(args []string) {
-	if len(args) == 0 {
-		cliutil.Fatalf("missing device file\n")
-	}
-	if len(args) > 1 {
-		cliutil.Fatalf("extra operand '%s'\n", args[1])
-	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
-	if c.id.IsZero() {
+func doScanFS(filename, metadata string, options scanFSOptions) {
+	if options.id.IsZero() {
 		cliutil.Fatalf("missing id option\n")
 	}
 
-	filename := args[0]
 	f, err := os.Open(filename)
 	cliutil.ReportError(err)
 	defer f.Close()
 
-	bs := uint64(*btrfscue.BlockSize)
+	bs := uint64(btrfscue.Options.BlockSize)
 
 	devSize, err := btrfs.CheckDeviceSize(f, bs)
 	cliutil.ReportError(err)
@@ -80,9 +85,9 @@ func (c *reconCommand) Run(args []string) {
 
 	buf := make([]byte, bs)
 
-	ix, err := index.Open(*btrfscue.Metadata, 0644, &index.Options{
+	ix, err := index.Open(btrfscue.Options.Metadata, 0644, &index.Options{
 		BlockSize:  uint(bs),
-		FSID:       c.id,
+		FSID:       options.id,
 		Generation: ^uint64(0),
 	})
 	cliutil.ReportError(err)
@@ -108,7 +113,7 @@ func (c *reconCommand) Run(args []string) {
 		h := l.Header()
 
 		// Skip this header if it has the wrong FSID or is empty.
-		if h.FSID() != c.id || h.NrItems() == 0 {
+		if h.FSID() != options.id || h.NrItems() == 0 {
 			continue
 		}
 		// Also skip all non-leaves (= nodes)
@@ -127,9 +132,4 @@ func (c *reconCommand) Run(args []string) {
 	bar.SetCurrent(int64(devSize))
 
 	bar.Finish()
-}
-
-func init() {
-	subcommand.Register("recon", "gather metadata for later use",
-		&reconCommand{})
 }

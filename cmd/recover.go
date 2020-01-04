@@ -25,33 +25,44 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package cmd // import "blichmann.eu/code/btrfscue/cmd"
 
 import (
-	"flag"
+	"github.com/spf13/cobra"
 
-	_ "blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfs/index"
 	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
-	_ "blichmann.eu/code/btrfscue/subcommand"
 )
 
-type recoverCommand struct {
-	clobber *bool
+type recoverFilesOptions struct {
+	clobber bool
 }
 
-func (c *recoverCommand) DefineFlags(fs *flag.FlagSet) {
-	c.clobber = fs.Bool("clobber", false,
-		"overwrite existing files")
-}
-
-func (c *recoverCommand) Run([]string) {
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
+func init() {
+	options := recoverFilesOptions{}
+	// TODO(cblichmann): This command is not implemented
+	recoverCmd := &cobra.Command{
+		Use:   "recover",
+		Short: "try to restore files from a damaged filesystem",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			if len(btrfscue.Options.Metadata) == 0 {
+				cliutil.Fatalf("missing metadata option\n")
+			}
+			doRecoverFiles(btrfscue.Options.Metadata)
+		},
 	}
 
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
+	fs := recoverCmd.PersistentFlags()
+	fs.BoolVar(&options.clobber, "clobber", false,
+		"overwrite existing files")
+
+	rootCmd.AddCommand(recoverCmd)
+}
+
+func doRecoverFiles(metadata string) {
+	ix, err := index.OpenReadOnly(metadata)
 	cliutil.ReportError(err)
 	defer ix.Close()
 
@@ -86,10 +97,4 @@ func (c *recoverCommand) Run([]string) {
 	//	c := ix.Chunk(i)
 	//	cliutil.Verbosef("%s %d 0x%x\n", ix.Key(i), c.Length, c.Stripes[0].Offset)
 	//}
-}
-
-func init() {
-	// TODO(cblichmann): This command is not implemented
-	//subcommand.Register("recover",
-	//	"try to restore files from a damaged filesystem", &recoverCommand{})
 }

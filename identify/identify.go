@@ -28,7 +28,6 @@
 package identify // import "blichmann.eu/code/btrfscue/identify"
 
 import (
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -39,10 +38,8 @@ import (
 	"github.com/cheggaaa/pb/v3"
 
 	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
 	"blichmann.eu/code/btrfscue/ioutil"
-	"blichmann.eu/code/btrfscue/subcommand"
 )
 
 type Uint64Array []uint64
@@ -84,53 +81,36 @@ func MakeSampleOffsets(devSize, blockSize, numSamples uint64) []uint64 {
 	return samples
 }
 
-type identifyCommand struct {
-	sampleFraction *float64
-	minBlocks      *uint
-	maxBlocks      *uint
-	minOccurrence  *uint
+type IdentifyFSOptions struct {
+	BlockSize      uint
+	SampleFraction float64
+	MinBlocks      uint
+	MaxBlocks      uint
+	MinOccurrence  uint
 }
 
-func (ic *identifyCommand) DefineFlags(fs *flag.FlagSet) {
-	ic.sampleFraction = fs.Float64("sample-fraction", 0.0001,
-		"fraction of blocks to sample for filesystem ids")
-	ic.minBlocks = fs.Uint("min-blocks", 1000, "minimum number of blocks to "+
-		"scan")
-	ic.maxBlocks = fs.Uint("max-blocks", 1000000, "maximum number of blocks "+
-		"to scan")
-	ic.minOccurrence = fs.Uint("min-occurrence", 4, "minimum number of "+
-		"occurrences of an id for a file system to be reported")
-}
-
-func (ic *identifyCommand) Run(args []string) {
-	if len(args) == 0 {
-		cliutil.Fatalf("missing device file\n")
-	} else if len(args) > 1 {
-		cliutil.Fatalf("extra operand '%s'\n", args[1])
-	}
-
-	filename := args[0]
+func IdentifyFS(filename string, options IdentifyFSOptions) {
 	dev, err := os.Open(filename)
 	cliutil.ReportError(err)
 	defer dev.Close()
 
-	bs := uint64(*btrfscue.BlockSize)
+	bs := uint64(options.BlockSize)
 
 	// Get total file/device size
 	devSize, err := btrfs.CheckDeviceSize(dev, bs)
 	cliutil.ReportError(err)
 
-	// Parse sampleFraction * 100% of all blocks (minimum minBlocks, up to
-	// maxBlocks) like this:
+	// Parse SampleFraction * 100% of all blocks (minimum MinBlocks, up to
+	// MaxBlocks) like this:
 	// 1. Read 100 blocks in the vicinity of all superblock copies and collect
 	//    FSIDs.
 	// 2. Read the rest of the blocks distributed randomly and collect FSIDs
 	// Return FSIDs that are most common.
-	numSamples := uint(*ic.sampleFraction * float64(devSize/bs))
-	if numSamples < *ic.minBlocks {
-		numSamples = *ic.minBlocks
-	} else if numSamples > *ic.maxBlocks {
-		numSamples = *ic.maxBlocks
+	numSamples := uint(options.SampleFraction * float64(devSize/bs))
+	if numSamples < options.MinBlocks {
+		numSamples = options.MinBlocks
+	} else if numSamples > options.MaxBlocks {
+		numSamples = options.MaxBlocks
 	}
 
 	cliutil.Verbosef("sampling %d blocks...\n", numSamples)
@@ -150,10 +130,10 @@ func (ic *identifyCommand) Run(args []string) {
 	}
 	bar.Finish()
 
-	occ := coll.Entries(*ic.minOccurrence)
+	occ := coll.Entries(options.MinOccurrence)
 	if len(occ) == 0 {
 		cliutil.Warnf("no filesystem id occured more than %d times, check "+
-			"--min-occurrence\n", *ic.minOccurrence)
+			"--min-occurrence\n", options.MinOccurrence)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
@@ -163,9 +143,4 @@ func (ic *identifyCommand) Run(args []string) {
 			entry.Entropy, entry.BlockSize)
 	}
 	w.Flush()
-}
-
-func init() {
-	subcommand.Register("identify",
-		"identify BTRFS filesystems on a device", &identifyCommand{})
 }

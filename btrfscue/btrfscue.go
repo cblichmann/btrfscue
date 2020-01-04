@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Global flags applicable to all/most commands
+ * Temporary placeholder for directory structure and go.mod
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,17 +27,8 @@
 
 package btrfscue // import "blichmann.eu/code/btrfscue/btrfscue"
 
-import (
-	"flag"
-	"os"
-
-	"blichmann.eu/code/btrfscue/btrfs"
-)
-
-var (
-	// Global options
-	BlockSize = flag.Uint("block-size", btrfs.DefaultBlockSize,
-		"filesystem block size")
-	Metadata = flag.String("metadata", os.Getenv("BTRFSCUE_METADATA"),
-		"metadata database to use")
-)
+var Options struct {
+	Verbose   bool
+	BlockSize uint
+	Metadata  string
+}

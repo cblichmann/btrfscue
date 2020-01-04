@@ -1,10 +1,8 @@
-// +build linux darwin
-
 /*
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Sub-command to provide and mount a "rescue fs"
+ * Recover data from damaged BTRFS filesystems
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,71 +25,53 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package main
+package cmd // import "blichmann.eu/code/btrfscue/cmd"
 
 import (
-	"flag"
 	"os"
-	"os/signal"
-	"syscall"
 
-	"blichmann.eu/code/btrfscue/btrfs/index"
+	"github.com/spf13/cobra"
+
+	"blichmann.eu/code/btrfscue/btrfs"
 	"blichmann.eu/code/btrfscue/btrfscue"
 	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/rescuefs"
-	"blichmann.eu/code/btrfscue/subcommand"
 )
 
-type mountCommand struct {
-}
-
-func (c *mountCommand) DefineFlags(fs *flag.FlagSet) {
-}
-
-func (c *mountCommand) Run(args []string) {
-	if len(args) == 0 {
-		cliutil.Fatalf("missing mount point\n")
-	}
-	if len(args) > 2 {
-		cliutil.Fatalf("extra operand '%s'\n", args[2])
-	}
-	if len(*btrfscue.Metadata) == 0 {
-		cliutil.Fatalf("missing metadata option\n")
-	}
-
-	ix, err := index.OpenReadOnly(*btrfscue.Metadata)
-	cliutil.ReportError(err)
-	defer ix.Close()
-
-	mountPoint := args[len(args)-1]
-	var dev *os.File
-	defer func() {
-		if dev != nil {
-			dev.Close()
-		}
-	}()
-	if len(args) == 2 {
-		dev, err = os.Open(args[0])
-		cliutil.ReportError(err)
-	} else {
-		cliutil.Warnf("no device file given, only inline file data will be " +
-			"visible\n")
-	}
-
-	fs := rescuefs.New(*btrfscue.Metadata, ix, dev)
-	cliutil.ReportError(fs.Mount(mountPoint))
-	cliutil.Verbosef("mounted rescue FS on %s\n", mountPoint)
-	go fs.Serve()
-
-	// Break and unmount on CTRL+C or TERM signal
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	_ = <-ch
-	cliutil.Warnf("got signal, unmounting...\n")
-	cliutil.ReportError(fs.Unmount())
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+	Use:     "btrfscue",
+	Short:   "Recover data from damaged BTRFS filesystems.",
+	Version: "0.0", // Set via SetVersionTemplate()
 }
 
 func init() {
-	subcommand.Register("mount",
-		"provide a 'rescue' filesystem backed by metadata", &mountCommand{})
+	options := &btrfscue.Options
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		cliutil.SetVerbose(options.Verbose)
+	}
+
+	rootCmd.SetVersionTemplate(`btrfscue 0.6
+Copyright (c)2011-2020 Christian Blichmann
+This software is BSD licensed, see the source for copying conditions.
+`)
+	rootCmd.SetUsageTemplate(rootCmd.UsageTemplate() + `
+For bug reporting instructions, please see:
+<https://github.com/cblichmann/btrfscue/issues>
+`)
+
+	fs := rootCmd.PersistentFlags()
+	fs.BoolVar(&options.Verbose, "verbose", false, "explain what is being done")
+	fs.UintVar(&options.BlockSize, "block-size", btrfs.DefaultBlockSize,
+		"filesystem block size")
+	fs.StringVar(&options.Metadata, "metadata", os.Getenv("BTRFSCUE_METADATA"),
+		"metadata database to use")
+}
+
+// Execute adds all child commands to the root command and sets flags
+// appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+	if rootCmd.Execute() != nil {
+		os.Exit(1)
+	}
 }
