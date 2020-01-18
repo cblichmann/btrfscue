@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Recover data from damaged BTRFS filesystems
+ * Recover data from damaged BTRFS filesystems, CLI entry point
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:

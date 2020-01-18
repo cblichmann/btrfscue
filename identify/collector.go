@@ -88,15 +88,13 @@ func (c *FSIDCollecter) CollectBlock(block []byte) {
 	if !ok {
 		entry = &histEntry{}
 		c.hist[fsid] = entry
-	} else {
-		if h.NrItems() > 0 {
-			item := btrfs.Item(block[btrfs.HeaderLen:])
-			// Since item headers and their data grow towards each other, the
-			// first item's offset will be the largest. In order to guess the
-			// actual block size, sum offsets for all entries belonging to an
-			// FSID to compute the average later.
-			entry.BlockSizeSum += uint64(item.Offset())
-		}
+	} else if h.NrItems() > 0 {
+		item := btrfs.Item(block[btrfs.HeaderLen:])
+		// Since item headers and their data grow towards each other, the
+		// first item's offset will be the largest. In order to guess the
+		// actual block size, sum offsets for all entries belonging to an
+		// FSID to compute the average later.
+		entry.BlockSizeSum += uint64(item.Offset())
 	}
 	entry.Count++
 }
@@ -106,7 +104,7 @@ func (c *FSIDCollecter) Entries(minOccurrence uint) []FSEntry {
 	// minOccurrence times.
 	occ := make(fsEntries, 0, len(c.hist))
 	for uuid, entry := range c.hist {
-		if entry.Count > minOccurrence {
+		if entry.Count >= minOccurrence {
 			// Compute average and round to nearest 4KiB.
 			guess := uint32(float64(entry.BlockSizeSum)/float64(entry.Count)+
 				btrfs.X86RegularPageSize) / btrfs.X86RegularPageSize *

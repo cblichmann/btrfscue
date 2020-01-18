@@ -82,3 +82,9 @@ func (u *UUID) Set(value string) error {
 }
 
 func (u UUID) Type() string { return "string" }
+
+func New(value string) (UUID, error) {
+	u := UUID{}
+	err := u.Set(value)
+	return u, err
+}
