@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package ioutil // import "blichmann.eu/code/btrfscue/ioutil"
+package ioutil
 
 import (
 	"fmt"

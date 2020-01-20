@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package identify // import "blichmann.eu/code/btrfscue/identify"
+package identify
 
 import (
 	"blichmann.eu/code/btrfscue/btrfs"

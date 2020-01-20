@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package btrfscue // import "blichmann.eu/code/btrfscue/btrfscue"
+package btrfscue
 
 var Options struct {
 	Verbose   bool

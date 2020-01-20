@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package cmd // import "blichmann.eu/code/btrfscue/cmd"
+package cmd
 
 import (
 	"io"

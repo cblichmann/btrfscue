@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package coding // import "blichmann.eu/code/btrfscue/coding"
+package coding
 
 import (
 	"math"

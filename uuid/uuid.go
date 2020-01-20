@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package uuid // import "blichmann.eu/code/btrfscue/uuid"
+package uuid
 
 import (
 	"encoding/hex"

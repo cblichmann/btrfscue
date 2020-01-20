@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package cliutil // import "blichmann.eu/code/btrfscue/cliutil"
+package cliutil
 
 import (
 	"fmt"

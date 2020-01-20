@@ -27,7 +27,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package rescuefs // import "blichmann.eu/code/btrfscue/rescuefs"
+package rescuefs
 
 import (
 	"blichmann.eu/code/btrfscue/cliutil"

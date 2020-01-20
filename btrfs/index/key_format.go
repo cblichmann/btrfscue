@@ -25,7 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package index // import "blichmann.eu/code/btrfscue/btrfs/index"
+package index
 
 import (
 	"encoding/binary"
