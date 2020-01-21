@@ -30,7 +30,7 @@ package btrfs
 import (
 	"time"
 
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
 const (

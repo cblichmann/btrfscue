@@ -1,8 +1,10 @@
+// +build !linux,!darwin
+
 /*
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Utility functions for dealing with byte slices
+ * Null implementation for non-Linux, non-Darwin systems
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,29 +27,25 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package btrfs
+package rescuefs
 
 import (
-	"encoding/binary"
-	"time"
+	"errors"
+	"io"
 
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
 )
 
-func SliceUint16LE(b []byte) uint16 { return binary.LittleEndian.Uint16(b[:2]) }
-func SliceUint32LE(b []byte) uint32 { return binary.LittleEndian.Uint32(b[:4]) }
-func SliceUint64LE(b []byte) uint64 { return binary.LittleEndian.Uint64(b[:8]) }
+type rescueFS struct{}
 
-func SliceUUID(b []byte) uuid.UUID {
-	u := uuid.UUID{}
-	copy(u[:], b[:uuid.UUIDSize])
-	return u
+func New(metadata string, ix *btrfs.Index, reader io.ReaderAt) rescueFS {
+	// Do nothing
+	return rescueFS{}
 }
 
-func SliceKey(b []byte) Key {
-	return Key{SliceUint64LE(b), uint8(b[8]), SliceUint64LE(b[9:])}
-}
+var errNotSupported = errors.New(
+	"FUSE mount is only supported on Linux and macOS")
 
-func SliceTimeLE(b []byte) time.Time {
-	return time.Unix(int64(SliceUint64LE(b)), int64(SliceUint32LE(b[8:])))
-}
+func (r *rescueFS) Mount(on string) error { return errNotSupported }
+func (r *rescueFS) Unmount() error        { return nil }
+func (r *rescueFS) Serve() error          { return errNotSupported }

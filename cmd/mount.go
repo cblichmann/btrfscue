@@ -36,10 +36,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/rescuefs"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/internal/rescuefs"
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
 )
 
 func init() {
@@ -48,10 +48,10 @@ func init() {
 		Short: "provide a 'rescue' filesystem backed by metadata",
 		Args:  cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(btrfscue.Options.Metadata) == 0 {
+			if len(app.Options.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doMountRescueFS(args, btrfscue.Options.Metadata)
+			doMountRescueFS(args, app.Options.Metadata)
 		},
 	}
 
@@ -78,7 +78,7 @@ func doMountRescueFS(args []string, metadata string) {
 			"visible\n")
 	}
 
-	fs := rescuefs.New(btrfscue.Options.Metadata, ix, dev)
+	fs := rescuefs.New(app.Options.Metadata, ix, dev)
 	cliutil.ReportError(fs.Mount(mountPoint))
 	cliutil.Verbosef("mounted rescue FS on %s\n", mountPoint)
 	go fs.Serve()

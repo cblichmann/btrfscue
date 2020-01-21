@@ -38,8 +38,8 @@ import (
 
 	"fmt"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 	"github.com/etcd-io/bbolt"
 )
 

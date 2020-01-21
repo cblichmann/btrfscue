@@ -1,10 +1,8 @@
-// +build linux darwin
-
 /*
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Rescue FS API
+ * Tests for the identify sub-command
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,38 +25,33 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package rescuefs
+package identify
 
 import (
-	"io"
+	"testing"
 
-	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/hanwen/go-fuse/v2/fuse/nodefs"
-
-	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
 )
 
-type rescueFS struct {
-	metadata string
-	ix       *index.Index
-
-	dev io.ReaderAt
-
-	root   *basicNode
-	server *fuse.Server
+func TestMakeSampleOffsets(t *testing.T) {
+	const (
+		numSamples = 3000
+		devSize    = 320 << 20 /*320MiB*/
+		blockSize  = btrfs.DefaultBlockSize
+	)
+	samples := MakeSampleOffsets(devSize, blockSize,
+		numSamples)
+	if len(samples) != numSamples {
+		t.Errorf("expected %d, actual %d", numSamples, len(samples))
+	}
+	last := uint64(devSize)
+	for i, o := range samples {
+		if o >= devSize-blockSize {
+			t.Fatalf("index out of range %d > %d", o, devSize-blockSize)
+		}
+		if i > 0 && o <= last {
+			t.Fatalf("samples need to be sorted, expected %d < %d", last, o)
+		}
+		last = o
+	}
 }
-
-func New(metadata string, ix *index.Index, dev io.ReaderAt) rescueFS {
-	r := rescueFS{metadata: metadata, ix: ix, dev: dev}
-	r.root = r.newNode()
-	return r
-}
-
-func (r *rescueFS) Mount(on string) error {
-	var err error
-	r.server, _, err = nodefs.MountRoot(on, r.root, &nodefs.Options{})
-	return err
-}
-
-func (r *rescueFS) Unmount() error { return r.server.Unmount() }
-func (r *rescueFS) Serve()         { r.server.Serve() }

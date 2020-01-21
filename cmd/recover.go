@@ -30,9 +30,9 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
 )
 
 type recoverFilesOptions struct {
@@ -47,10 +47,10 @@ func init() {
 		Short: "try to restore files from a damaged filesystem",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(btrfscue.Options.Metadata) == 0 {
+			if len(app.Options.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doRecoverFiles(btrfscue.Options.Metadata)
+			doRecoverFiles(app.Options.Metadata)
 		},
 	}
 

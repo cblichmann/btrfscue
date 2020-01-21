@@ -30,7 +30,7 @@ package index
 import (
 	"encoding/binary"
 
-	"blichmann.eu/code/btrfscue/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
 )
 
 // keyV1 holds the BTRFS key of an owned FS object as well as its

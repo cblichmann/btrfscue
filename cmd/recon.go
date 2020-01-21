@@ -34,12 +34,12 @@ import (
 	"github.com/cheggaaa/pb/v3"
 	"github.com/spf13/cobra"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/ioutil"
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
+	"blichmann.eu/code/btrfscue/pkg/ioutil"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
 type scanFSOptions struct {
@@ -54,10 +54,10 @@ func init() {
 		Short: "gather metadata for later use",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(btrfscue.Options.Metadata) == 0 {
+			if len(app.Options.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doScanFS(args[0], btrfscue.Options.Metadata, options)
+			doScanFS(args[0], app.Options.Metadata, options)
 		},
 	}
 
@@ -77,7 +77,7 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	cliutil.ReportError(err)
 	defer f.Close()
 
-	bs := uint64(btrfscue.Options.BlockSize)
+	bs := uint64(app.Options.BlockSize)
 
 	devSize, err := btrfs.CheckDeviceSize(f, bs)
 	cliutil.ReportError(err)
@@ -85,7 +85,7 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 
 	buf := make([]byte, bs)
 
-	ix, err := index.Open(btrfscue.Options.Metadata, 0644, &index.Options{
+	ix, err := index.Open(app.Options.Metadata, 0644, &index.Options{
 		BlockSize:  uint(bs),
 		FSID:       options.id,
 		Generation: ^uint64(0),

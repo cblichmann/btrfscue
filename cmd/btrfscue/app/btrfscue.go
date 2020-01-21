@@ -1,10 +1,8 @@
-// +build !linux,!darwin
-
 /*
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Null implementation for non-Linux, non-Darwin systems
+ * Temporary placeholder for directory structure and go.mod
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -27,25 +25,10 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package rescuefs
+package app
 
-import (
-	"errors"
-	"io"
-
-	"blichmann.eu/code/btrfscue/btrfs"
-)
-
-type rescueFS struct{}
-
-func New(metadata string, ix *btrfs.Index, reader io.ReaderAt) rescueFS {
-	// Do nothing
-	return rescueFS{}
+var Options struct {
+	Verbose   bool
+	BlockSize uint
+	Metadata  string
 }
-
-var errNotSupported = errors.New(
-	"FUSE mount is only supported on Linux and macOS")
-
-func (r *rescueFS) Mount(on string) error { return errNotSupported }
-func (r *rescueFS) Unmount() error        { return nil }
-func (r *rescueFS) Serve() error          { return errNotSupported }

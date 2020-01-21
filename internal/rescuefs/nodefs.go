@@ -39,8 +39,8 @@ import (
 
 	"fmt" //DBG!!!
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
 )
 
 func init() { fmt.Printf("") } //DBG!!!

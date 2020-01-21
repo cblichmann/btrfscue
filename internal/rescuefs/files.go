@@ -30,7 +30,7 @@
 package rescuefs
 
 import (
-	"blichmann.eu/code/btrfscue/cliutil"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"github.com/hanwen/go-fuse/v2/fuse/nodefs"
 )

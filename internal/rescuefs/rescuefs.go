@@ -1,8 +1,10 @@
+// +build linux darwin
+
 /*
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Temporary placeholder for directory structure and go.mod
+ * Rescue FS API
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,10 +27,38 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package btrfscue
+package rescuefs
 
-var Options struct {
-	Verbose   bool
-	BlockSize uint
-	Metadata  string
+import (
+	"io"
+
+	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/hanwen/go-fuse/v2/fuse/nodefs"
+
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
+)
+
+type rescueFS struct {
+	metadata string
+	ix       *index.Index
+
+	dev io.ReaderAt
+
+	root   *basicNode
+	server *fuse.Server
 }
+
+func New(metadata string, ix *index.Index, dev io.ReaderAt) rescueFS {
+	r := rescueFS{metadata: metadata, ix: ix, dev: dev}
+	r.root = r.newNode()
+	return r
+}
+
+func (r *rescueFS) Mount(on string) error {
+	var err error
+	r.server, _, err = nodefs.MountRoot(on, r.root, &nodefs.Options{})
+	return err
+}
+
+func (r *rescueFS) Unmount() error { return r.server.Unmount() }
+func (r *rescueFS) Serve()         { r.server.Serve() }

@@ -31,9 +31,9 @@ import (
 	"bytes"
 	"sort"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/coding"
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/coding"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
 type FSEntry struct {

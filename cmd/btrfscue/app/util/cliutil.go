@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Tests for the identify sub-command
+ * Command-line application utilities
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,33 +25,44 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package identify
+package util
 
 import (
-	"testing"
-
-	"blichmann.eu/code/btrfscue/btrfs"
+	"fmt"
+	"os"
 )
 
-func TestMakeSampleOffsets(t *testing.T) {
-	const (
-		numSamples = 3000
-		devSize    = 320 << 20 /*320MiB*/
-		blockSize  = btrfs.DefaultBlockSize
-	)
-	samples := MakeSampleOffsets(devSize, blockSize,
-		numSamples)
-	if len(samples) != numSamples {
-		t.Errorf("expected %d, actual %d", numSamples, len(samples))
+const warnPrefix = "btrfscue: "
+
+var verbose = false
+
+// Warnf prints a formatted warning message to stderr.
+func Warnf(format string, v ...interface{}) {
+	fmt.Fprintf(os.Stderr, warnPrefix+format, v...)
+}
+
+// Fatalf prints a formatted error message to stderr and exits the program
+// with exit code 1.
+func Fatalf(format string, v ...interface{}) {
+	Warnf(format, v...)
+	os.Exit(1)
+}
+
+// SetVerbose enables or disables verbose messages.
+func SetVerbose(v bool) { verbose = v }
+
+// Verbosef prints a formatted message to stdout if in verbose mode. Use
+// SetVerbose to enable/disable verbose mode.
+func Verbosef(format string, v ...interface{}) {
+	if verbose {
+		fmt.Printf(format, v...)
 	}
-	last := uint64(devSize)
-	for i, o := range samples {
-		if o >= devSize-blockSize {
-			t.Fatalf("index out of range %d > %d", o, devSize-blockSize)
-		}
-		if i > 0 && o <= last {
-			t.Fatalf("samples need to be sorted, expected %d < %d", last, o)
-		}
-		last = o
+}
+
+// ReportError checks if there was an error and conditionally reports it by
+// calling Fatalf().
+func ReportError(err error) {
+	if err != nil {
+		Fatalf("%s\n", err)
 	}
 }

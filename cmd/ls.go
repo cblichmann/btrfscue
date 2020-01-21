@@ -38,10 +38,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfs/index"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
 )
 
 func dirItemTypeString(t uint8) string {
@@ -150,10 +150,10 @@ func init() {
 		Short: "list information about files, directories and " +
 			"subvolumes/snapshots",
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(btrfscue.Options.Metadata) == 0 {
+			if len(app.Options.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doListFiles(args, btrfscue.Options.Metadata, options)
+			doListFiles(args, app.Options.Metadata, options)
 		},
 	}
 
@@ -171,7 +171,7 @@ func doListFiles(args []string, metadata string, options listFilesOptions) {
 		args = append(args, "/")
 	}
 
-	ix, err := index.OpenReadOnly(btrfscue.Options.Metadata)
+	ix, err := index.OpenReadOnly(app.Options.Metadata)
 	cliutil.ReportError(err)
 	defer ix.Close()
 

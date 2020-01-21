@@ -28,8 +28,8 @@
 package cmd
 
 import (
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/identify"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	"blichmann.eu/code/btrfscue/internal/identify"
 
 	"github.com/spf13/cobra"
 )
@@ -41,7 +41,7 @@ func init() {
 		Short: "identify a BTRFS filesystem on a device",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			options.BlockSize = btrfscue.Options.BlockSize
+			options.BlockSize = app.Options.BlockSize
 			identify.IdentifyFS(args[0], options)
 		},
 	}

@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Tests for BTRFS index
+ * Utility functions for dealing with byte slices
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -25,52 +25,29 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-package index
+package btrfs
 
 import (
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
+	"encoding/binary"
+	"time"
 
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
-func TestCreation(t *testing.T) {
-	td, err := ioutil.TempDir("", "index_store_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(td)
-	testFile := filepath.Join(td, "index")
+func SliceUint16LE(b []byte) uint16 { return binary.LittleEndian.Uint16(b[:2]) }
+func SliceUint32LE(b []byte) uint32 { return binary.LittleEndian.Uint32(b[:4]) }
+func SliceUint64LE(b []byte) uint64 { return binary.LittleEndian.Uint64(b[:8]) }
 
-	const (
-		blockSize  = 4096
-		generation = 424242
-	)
-	fsid := uuid.UUID{0xa7, 0xf3, 0x26, 0x75, 0xa3, 0x26, 0x04, 0xf9, 0x2c,
-		0xd1, 0xe4, 0x8b, 0x6f, 0x93, 0x98, 0xe0}
+func SliceUUID(b []byte) uuid.UUID {
+	u := uuid.UUID{}
+	copy(u[:], b[:uuid.UUIDSize])
+	return u
+}
 
-	ix, err := Open(testFile, 0644, &Options{BlockSize: blockSize, FSID: fsid,
-		Generation: generation})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ix.Close()
+func SliceKey(b []byte) Key {
+	return Key{SliceUint64LE(b), uint8(b[8]), SliceUint64LE(b[9:])}
+}
 
-	ix, err = OpenReadOnly(testFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := ix.Metadata()
-	if m.BlockSize() != blockSize {
-		t.Fatalf("%d vs. %d", blockSize, m.BlockSize())
-	}
-	if m.FSID() != fsid {
-		t.Fatalf("%s vs. %s", fsid, m.FSID())
-	}
-	if m.Generation() != generation {
-		t.Fatalf("%d vs. %d", generation, m.Generation())
-	}
-	ix.Close()
+func SliceTimeLE(b []byte) time.Time {
+	return time.Unix(int64(SliceUint64LE(b)), int64(SliceUint32LE(b[8:])))
 }

@@ -37,9 +37,9 @@ import (
 
 	"github.com/cheggaaa/pb/v3"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/cliutil"
-	"blichmann.eu/code/btrfscue/ioutil"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
+	"blichmann.eu/code/btrfscue/pkg/ioutil"
 )
 
 type Uint64Array []uint64

@@ -32,9 +32,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"blichmann.eu/code/btrfscue/btrfs"
-	"blichmann.eu/code/btrfscue/btrfscue"
-	"blichmann.eu/code/btrfscue/cliutil"
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
+	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
+	"blichmann.eu/code/btrfscue/pkg/btrfs"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -45,7 +45,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	options := &btrfscue.Options
+	options := &app.Options
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		cliutil.SetVerbose(options.Verbose)
 	}

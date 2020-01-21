@@ -28,7 +28,7 @@
 package btrfs
 
 import (
-	"blichmann.eu/code/btrfscue/uuid"
+	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
 type Header []byte
