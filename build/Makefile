@@ -39,6 +39,7 @@ bin_dir := $(this_dir)/bin
 export GOBIN := $(bin_dir)
 
 binaries := $(addprefix $(bin_dir)/,$(go_programs))
+coverage := c.out
 sources := $(wildcard $(shell (unset GOPATH; go list -f '{{.Dir}}/*.go' ./...)))
 
 .PHONY: all
@@ -47,7 +48,7 @@ all: $(binaries)
 .PHONY: clean
 clean:
 	@echo "  [Clean]     Removing build artifacts"
-	@rm -f $(binaries) || true
+	@rm -f $(binaries) $(coverage) || true
 	@rmdir "$(bin_dir)" || true
 
 $(binaries): $(sources)
@@ -57,7 +58,18 @@ $(binaries): $(sources)
 .PHONY: test
 test:
 	@echo "  [Test]"
-	@(unset GOPATH; go test ./...)
+	@(unset GOPATH; go test $(COVER_ARGS) ./...)
+
+$(coverage): COVER_ARGS=-coverprofile=$(coverage)
+$(coverage): test
+	@echo "  [Coverage]  $@"
+
+.PHONY: coverage
+coverage: $(coverage)
+
+.PHONY: show_coverage
+show_coverage:
+	@go tool cover -html=c.out
 
 $(source_only_tgz): clean
 	@echo "  [Archive]   $@"

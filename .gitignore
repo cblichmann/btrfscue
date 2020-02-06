@@ -1,9 +1,10 @@
 # Build artifacts
 bin/
-pkg/
 src/
 # Editor swap files
 .*.sw[op]
 # Development temp files
 __tmp/
 *.img
+# Test coverage report
+c.out

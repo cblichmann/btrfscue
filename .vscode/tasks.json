@@ -17,6 +17,18 @@
 			"group": "test"
 		},
 		{
+			"label": "Run tests w/ coverage",
+			"type": "shell",
+			"command": "make coverage",
+			"group": "test"
+		},
+		{
+			"label": "Show code coverage report",
+			"type": "shell",
+			"command": "make show_coverage",
+			"group": "test"
+		},
+		{
 			"label": "Clean",
 			"type": "shell",
 			"command": "make clean"
@@ -29,7 +41,7 @@
 		{
 			"label": "Update source metdata",
 			"type": "shell",
-			"command": "make updatesourcemeta",
+			"command": "make updatesourcemeta"
 		}
 	]
 }
