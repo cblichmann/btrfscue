@@ -70,12 +70,12 @@ func (u UUID) String() string {
 
 func (u *UUID) Set(value string) error {
 	b, err := hex.DecodeString(strings.Replace(value, "-", "", -1))
-	if len(b) != UUIDSize {
-		err = fmt.Errorf("expected %d hex characters plus optional dashes",
-			UUIDSize*2)
-	}
 	if err != nil {
 		return err
+	}
+	if len(b) != UUIDSize {
+		return fmt.Errorf("expected %d hex characters plus optional dashes",
+			UUIDSize*2)
 	}
 	copy(u[:], b)
 	return nil

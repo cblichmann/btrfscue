@@ -55,7 +55,7 @@ func TestShannonEntropy(t *testing.T) {
 	}
 	for _, v := range values {
 		if a := round(ShannonEntropy(v.b), v.r); a != v.e {
-			t.Fatalf("%f vs. %f", a, v.e)
+			t.Fatalf("expected %f, got: %f", v.e, a)
 		}
 	}
 }
