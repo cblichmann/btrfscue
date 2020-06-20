@@ -40,7 +40,7 @@ import (
 
 	"blichmann.eu/code/btrfscue/pkg/btrfs"
 	"blichmann.eu/code/btrfscue/pkg/uuid"
-	"github.com/etcd-io/bbolt"
+	"go.etcd.io/bbolt"
 )
 
 func init() { fmt.Printf("") } //DBG!!!
