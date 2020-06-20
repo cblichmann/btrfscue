@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * Temporary placeholder for directory structure and go.mod
+ * Global options and top-level app utility package
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
