@@ -103,7 +103,7 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 
 	// Start right after the first superblock
 	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
-		if err = ioutil.ReadBlockAt(f, buf, off, bs); err == io.EOF {
+		if err = ioutil.ReadBlockAt(f, buf, off); err == io.EOF {
 			break
 		} else if err != nil {
 			cliutil.ReportError(err)

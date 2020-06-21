@@ -125,7 +125,7 @@ func IdentifyFS(filename string, options IdentifyFSOptions) {
 	coll := FSIDCollecter{}
 	for i, offset := range samples {
 		bar.SetCurrent(int64(i + 1))
-		cliutil.ReportError(ioutil.ReadBlockAt(dev, buf, offset, bs))
+		cliutil.ReportError(ioutil.ReadBlockAt(dev, buf, offset))
 		coll.CollectBlock(buf)
 	}
 	bar.Finish()

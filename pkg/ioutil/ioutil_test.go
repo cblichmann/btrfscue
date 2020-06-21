@@ -2,7 +2,7 @@
  * btrfscue version 0.6
  * Copyright (c)2011-2020 Christian Blichmann
  *
- * I/O utility routines
+ * Tests for I/O utility routines
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -28,17 +28,34 @@
 package ioutil
 
 import (
+	"bytes"
 	"io"
+	"testing"
 )
 
-// ReadBlockAt reads a block of data from an io.ReaderAt.
-//
-// It always either reads a full block or reports an error.
-func ReadBlockAt(r io.ReaderAt, block []byte, offset uint64) error {
-	if read, err := r.ReadAt(block, int64(offset)); err != nil {
-		return err
-	} else if read == len(block) {
-		return nil // Never return EOF if read succeeded
+func TestReadBlockAt(t *testing.T) {
+	r := bytes.NewReader([]byte("0123456789abcdefghij")) // 20 bytes
+	buf := make([]byte, 10)
+	var expected []byte
+
+	if err := ReadBlockAt(r, buf, 0); err != nil {
+		t.Fatalf("expected no error, got: %s", err)
 	}
-	return nil
+	expected = []byte("0123456789")
+	if !bytes.Equal(buf, expected) {
+		t.Fatalf("%s vs %s", expected, buf)
+	}
+
+	if err := ReadBlockAt(r, buf, 10); err != nil {
+		// Ensure we don't get EOF at the end
+		t.Fatalf("nil vs %s", err)
+	}
+	expected = []byte("abcdefghij")
+	if !bytes.Equal(buf, expected) {
+		t.Fatalf("%s vs %s", expected, buf)
+	}
+
+	if err := ReadBlockAt(r, buf, 11); err != io.EOF {
+		t.Fatalf("nil vs %s", err)
+	}
 }
