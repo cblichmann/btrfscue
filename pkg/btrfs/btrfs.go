@@ -375,32 +375,32 @@ func (i DevItem) TotalBytes() uint64 { return SliceUint64LE(i[devItemTotalBytes:
 // BytesUsed returns the number of bytes used
 func (i DevItem) BytesUsed() uint64 { return SliceUint64LE(i[devItemBytesUsed:]) }
 
-// IOAlign return the optimal I/O alignment for this device
+// IOAlign returns the optimal I/O alignment for this device
 func (i DevItem) IOAlign() uint32 { return SliceUint32LE(i[devItemIOAlign:]) }
 
-// IOWidth return the optimal I/O width for this device
+// IOWidth returns the optimal I/O width for this device
 func (i DevItem) IOWidth() uint32 { return SliceUint32LE(i[devItemIOWidth:]) }
 
 // SectorSize returns the minimal I/O size for this device
 func (i DevItem) SectorSize() uint32 { return SliceUint32LE(i[devItemSectorSize:]) }
 
-// Type returnst the type and info about this device
+// Type returns the type and info about this device
 func (i DevItem) Type() uint64 { return SliceUint64LE(i[devItemType:]) }
 
-// Generation returnst the expected generation for this device
+// Generation returns the expected generation for this device
 func (i DevItem) Generation() uint64 { return SliceUint64LE(i[devItemGeneration:]) }
 
 // StartOffset returns the starting byte of this partition on the device. This
 // allows for stripe alignment in the future.
 func (i DevItem) StartOffset() uint64 { return SliceUint64LE(i[devItemStartOffset:]) }
 
-// DevGroup return grouping information for allocation decisions
+// DevGroup returns grouping information for allocation decisions
 func (i DevItem) DevGroup() uint32 { return SliceUint32LE(i[devItemDevGroup:]) }
 
 // SeekSpeed returns the device seek speed in range 0-100 where 100 is fastest
 func (i DevItem) SeekSpeed() uint8 { return i[devItemSeekSpeed] }
 
-// Bandwidth returnst the device bandwidth in range 0-100 where 100 is fastest
+// Bandwidth returns the device bandwidth in range 0-100 where 100 is fastest
 func (i DevItem) Bandwidth() uint8 { return i[devItemBandwidth] }
 
 // UUID returns the BTRFS generated UUID for this device
@@ -438,26 +438,27 @@ const (
 	chunkStripes    = chunkSubStripes + 2
 )
 
-// Size of this chunk in bytes
+// Length returns the size of this chunk in bytes
 func (c Chunk) Length() uint64 { return SliceUint64LE(c[chunkLength:]) }
 
-// ObjectID of the root referencing this chunk
+// Owner returns the ObjectID of the root referencing this chunk
 func (c Chunk) Owner() uint64 { return SliceUint64LE(c[chunkOwner:]) }
 
 func (c Chunk) StripeLen() uint64 { return SliceUint64LE(c[chunkStripeLen:]) }
 
-// Type of this chunk. Reuses BlockGroupItem's Flags
+// Type returns the type of this chunk. Reuses BlockGroupItem's Flags
 func (c Chunk) Type() uint64 { return SliceUint64LE(c[chunkType:]) }
 
-// Optimal IO alignment for this chunk
+// IOAlign returns the optimal IO alignment for this chunk
 func (c Chunk) IOAlign() uint32 { return SliceUint32LE(c[chunkIOAlign:]) }
 
-// Optimal IO width for this chunk
+// IOWidth returns the optimal IO width for this chunk
 func (c Chunk) IOWidth() uint32 { return SliceUint32LE(c[chunkIOWidth:]) }
 
-// Minimal IO size for this chunk
+// SectorSize returns the minimal IO size for this chunk
 func (c Chunk) SectorSize() uint32 { return SliceUint32LE(c[chunkSectorSize:]) }
 
+// NumStripes returns the number of stripes in this chunk.
 // 2^16 stripes is quite a lot, a second limit is the size of a single
 // item in the btree
 func (c Chunk) NumStripes() uint16 { return SliceUint16LE(c[chunkNumStripes:]) }
