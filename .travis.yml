@@ -1,8 +1,0 @@
-language: go
-
-go:
-    - 1.12
-    - tip
-
-script:
-    - make all test
