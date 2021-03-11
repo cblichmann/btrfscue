@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2020 Christian Blichmann
+ * Copyright (c)2011-2021 Christian Blichmann
  *
  * Recover data from damaged BTRFS filesystems
  *
@@ -51,7 +51,7 @@ func init() {
 	}
 
 	rootCmd.SetVersionTemplate(`btrfscue 0.6
-Copyright (c)2011-2020 Christian Blichmann
+Copyright (c)2011-2021 Christian Blichmann
 This software is BSD licensed, see the source for copying conditions.
 `)
 	rootCmd.SetUsageTemplate(rootCmd.UsageTemplate() + `

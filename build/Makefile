@@ -1,7 +1,7 @@
 #!/usr/bin/env make
 #
 # btrfscue version 0.6
-# Copyright (c)2011-2020 Christian Blichmann
+# Copyright (c)2011-2021 Christian Blichmann
 #
 # Makefile for POSIX compatible systems
 #

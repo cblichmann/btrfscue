@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2020 Christian Blichmann
+ * Copyright (c)2011-2021 Christian Blichmann
  *
  * BTRFS filesystem structures - Leaf, Header and Items
  *
@@ -90,8 +90,7 @@ func (l Leaf) Header() Header { return Header(l) }
 
 // Len returns the number of items in this leaf.
 func (l Leaf) Len() int {
-	// Clamp maximum number of items to avoid running OOM in case NrItems is
-	// corrupted.
+	// Clamp maximum number of items to avoid OOM in case NrItems is corrupted.
 	maxItems := cap(l) / ItemLen
 	numItems := l.Header().NrItems()
 	if numItems > uint32(maxItems) {

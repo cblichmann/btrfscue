@@ -2,7 +2,7 @@
 
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2020 Christian Blichmann
+ * Copyright (c)2011-2021 Christian Blichmann
  *
  * Null implementation for non-Linux, non-Darwin systems
  *
