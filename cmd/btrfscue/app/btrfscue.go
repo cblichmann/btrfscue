@@ -27,8 +27,12 @@
 
 package app
 
-var Options struct {
+type Options struct {
 	Verbose   bool
+	Progress  bool
+	Machine   bool // Display machine parseable output
 	BlockSize uint
 	Metadata  string
 }
+
+var Global Options

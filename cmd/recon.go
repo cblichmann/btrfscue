@@ -54,10 +54,10 @@ func init() {
 		Short: "gather metadata for later use",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(app.Options.Metadata) == 0 {
+			if len(app.Global.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doScanFS(args[0], app.Options.Metadata, options)
+			doScanFS(args[0], app.Global.Metadata, options)
 		},
 	}
 
@@ -77,7 +77,7 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	cliutil.ReportError(err)
 	defer f.Close()
 
-	bs := uint64(app.Options.BlockSize)
+	bs := uint64(app.Global.BlockSize)
 
 	devSize, err := btrfs.CheckDeviceSize(f, bs)
 	cliutil.ReportError(err)
@@ -85,7 +85,7 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 
 	buf := make([]byte, bs)
 
-	ix, err := index.Open(app.Options.Metadata, 0644, &index.Options{
+	ix, err := index.Open(app.Global.Metadata, 0644, &index.Options{
 		BlockSize:  uint(bs),
 		FSID:       options.id,
 		Generation: ^uint64(0),
@@ -98,7 +98,9 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 
 	bar := pb.New64(int64(devSize)) //.SetUnits(pb.U_BYTES)
 	bar.SetMaxWidth(120)
-	bar.Start()
+	if app.Global.Progress {
+		bar.Start()
+	}
 	defer bar.Finish()
 
 	// Start right after the first superblock

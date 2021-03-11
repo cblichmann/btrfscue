@@ -89,7 +89,7 @@ func listDirItem(w io.Writer, ix *index.Index, owner uint64, di btrfs.DirItem,
 	if showInode {
 		fmt.Fprintf(w, "%d\t", di.Location().ObjectID)
 	}
-	fmt.Fprintf(w, dirItemTypeString(di.Type()))
+	fmt.Fprint(w, dirItemTypeString(di.Type()))
 	if ii := ix.FindInodeItem(owner, inode); ii == nil {
 		fmt.Fprintf(w, "?????????\t?\t?\t?\t?\t?")
 	} else {
@@ -150,10 +150,10 @@ func init() {
 		Short: "list information about files, directories and " +
 			"subvolumes/snapshots",
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(app.Options.Metadata) == 0 {
+			if len(app.Global.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doListFiles(args, app.Options.Metadata, options)
+			doListFiles(args, app.Global.Metadata, options)
 		},
 	}
 
@@ -171,7 +171,7 @@ func doListFiles(args []string, metadata string, options listFilesOptions) {
 		args = append(args, "/")
 	}
 
-	ix, err := index.OpenReadOnly(app.Options.Metadata)
+	ix, err := index.OpenReadOnly(app.Global.Metadata)
 	cliutil.ReportError(err)
 	defer ix.Close()
 

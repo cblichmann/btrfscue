@@ -45,9 +45,9 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	options := &app.Options
+	global := &app.Global
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
-		cliutil.SetVerbose(options.Verbose)
+		cliutil.SetVerbose(global.Verbose)
 	}
 
 	rootCmd.SetVersionTemplate(`btrfscue 0.6
@@ -60,16 +60,20 @@ For bug reporting instructions, please see:
 `)
 
 	fs := rootCmd.PersistentFlags()
-	fs.BoolVar(&options.Verbose, "verbose", false, "explain what is being done")
-	fs.UintVar(&options.BlockSize, "block-size", btrfs.DefaultBlockSize,
+	fs.BoolVarP(&global.Verbose, "verbose", "v", false,
+		"explain what is being done")
+	fs.BoolVarP(&global.Progress, "progress", "p", true,
+		"display visual progress")
+	fs.BoolVarP(&global.Machine, "machine", "m", false,
+		"display machine parseable output")
+	fs.UintVar(&global.BlockSize, "block-size", btrfs.DefaultBlockSize,
 		"filesystem block size")
-	fs.StringVar(&options.Metadata, "metadata", os.Getenv("BTRFSCUE_METADATA"),
+	fs.StringVar(&global.Metadata, "metadata", os.Getenv("BTRFSCUE_METADATA"),
 		"metadata database to use")
 }
 
 // Execute adds all child commands to the root command and sets flags
-// appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+// appropriately. This is called by main.main().
 func Execute() {
 	if rootCmd.Execute() != nil {
 		os.Exit(1)

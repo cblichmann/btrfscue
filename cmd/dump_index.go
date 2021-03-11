@@ -43,10 +43,10 @@ func init() {
 		Short: "for debugging, dump the index in text format",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(app.Options.Metadata) == 0 {
+			if len(app.Global.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doDumpIndex(app.Options.Metadata)
+			doDumpIndex(app.Global.Metadata)
 		},
 	}
 

@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2021 Christian Blichmann
+ * Copyright (c)2011-2020 Christian Blichmann
  *
  * BTRFS filesystem index data structure
  *
@@ -53,7 +53,7 @@ var metadataKey = newIndexKey(^uint64(0), KL(), ^uint64(0))
 const (
 	// Index metadata version. Set to ISO date (decimal) whenever there are
 	// incompatible changes.
-	MetadataVersion           = 20190809 // V2: Put generation first (decending) in key
+	MetadataVersion           = 20190809 // V2: Put generation first (descending) in key
 	MetadataVersionUpgradable = 20161109 // V1: Orignal format using Boltdb
 )
 

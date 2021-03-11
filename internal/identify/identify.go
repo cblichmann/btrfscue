@@ -37,6 +37,7 @@ import (
 
 	"github.com/cheggaaa/pb/v3"
 
+	"blichmann.eu/code/btrfscue/cmd/btrfscue/app"
 	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
 	"blichmann.eu/code/btrfscue/pkg/btrfs"
 	"blichmann.eu/code/btrfscue/pkg/ioutil"
@@ -73,7 +74,7 @@ func MakeSampleOffsets(devSize, blockSize, numSamples uint64) []uint64 {
 	// Sort samples vector to access device in one direction only
 	samples := make(Uint64Array, numSamples)
 	i := 0
-	for o, _ := range sampleSet {
+	for o := range sampleSet {
 		samples[i] = o
 		i++
 	}
@@ -119,7 +120,9 @@ func IdentifyFS(filename string, options IdentifyFSOptions) {
 	samples := MakeSampleOffsets(devSize, bs, uint64(numSamples))
 
 	bar := pb.New(len(samples))
-	bar.Start()
+	if app.Global.Progress {
+		bar.Start()
+	}
 
 	buf := make([]byte, bs)
 	coll := FSIDCollecter{}
@@ -136,8 +139,16 @@ func IdentifyFS(filename string, options IdentifyFSOptions) {
 			"--min-occurrence\n", options.MinOccurrence)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, ' ', 0)
-	fmt.Fprintln(w, "fsid\tcount\tentropy\tblock size")
+	var c byte
+	if app.Global.Machine {
+		c = '\t'
+	} else {
+		c = ' '
+	}
+	w := tabwriter.NewWriter(os.Stdout, 1, 4, 1, c, 0)
+	if !app.Global.Machine {
+		fmt.Fprintln(w, "fsid\tcount\tentropy\tblock size")
+	}
 	for _, entry := range occ {
 		fmt.Fprintf(w, "%s\t%d\t%.6f\t%d\n", entry.FSID, entry.Count,
 			entry.Entropy, entry.BlockSize)

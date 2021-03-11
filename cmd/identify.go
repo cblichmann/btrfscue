@@ -41,7 +41,7 @@ func init() {
 		Short: "identify a BTRFS filesystem on a device",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			options.BlockSize = app.Options.BlockSize
+			options.BlockSize = app.Global.BlockSize
 			identify.IdentifyFS(args[0], options)
 		},
 	}

@@ -48,10 +48,10 @@ func init() {
 		Short: "provide a 'rescue' filesystem backed by metadata",
 		Args:  cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(app.Options.Metadata) == 0 {
+			if len(app.Global.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doMountRescueFS(args, app.Options.Metadata)
+			doMountRescueFS(args, app.Global.Metadata)
 		},
 	}
 
@@ -78,7 +78,7 @@ func doMountRescueFS(args []string, metadata string) {
 			"visible\n")
 	}
 
-	fs := rescuefs.New(app.Options.Metadata, ix, dev)
+	fs := rescuefs.New(app.Global.Metadata, ix, dev)
 	cliutil.ReportError(fs.Mount(mountPoint))
 	cliutil.Verbosef("mounted rescue FS on %s\n", mountPoint)
 	go fs.Serve()
@@ -86,7 +86,7 @@ func doMountRescueFS(args []string, metadata string) {
 	// Break and unmount on CTRL+C or TERM signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	_ = <-ch
+	<-ch
 	cliutil.Warnf("got signal, unmounting...\n")
 	cliutil.ReportError(fs.Unmount())
 }

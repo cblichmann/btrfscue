@@ -47,10 +47,10 @@ func init() {
 		Short: "try to restore files from a damaged filesystem",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if len(app.Options.Metadata) == 0 {
+			if len(app.Global.Metadata) == 0 {
 				cliutil.Fatalf("missing metadata option\n")
 			}
-			doRecoverFiles(app.Options.Metadata)
+			doRecoverFiles(app.Global.Metadata)
 		},
 	}
 
@@ -74,7 +74,6 @@ func doRecoverFiles(metadata string) {
 			v.ByteNr(), v.Level(), v.RootDirID(), v.Refs(), v.Generation(), v.LastSnapshot())
 	}
 
-	return
 	//inode := uint64(264) // src.zip
 	//ii := ix.InodeItem(ix.FindInodeItem(inode))
 	//cliutil.Verbosef("file size: %d\n", ii.Size)
