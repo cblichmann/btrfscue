@@ -2,7 +2,7 @@
 
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2021 Christian Blichmann
+ * Copyright (c)2011-2022 Christian Blichmann
  *
  * Sub-command to provide and mount a "rescue fs"
  *

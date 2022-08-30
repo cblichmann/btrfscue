@@ -53,7 +53,7 @@ This definitely does not work:
 Requirements
 ------------
 
-  - Go 1.12 or higher
+  - Go 1.18 or higher
   - Git version 1.7 or later
   - Optional: CDBS (to build the Debian packages)
   - Optional: GNU Make
@@ -151,7 +151,7 @@ Copyright/License
 -----------------
 
 btrfscue version 0.6
-Copyright (c)2011-2021 Christian Blichmann <mail@blichmann.eu>
+Copyright (c)2011-2022 Christian Blichmann <mail@blichmann.eu>
 
 btrfscue is licensed under a two-clause BSD license, see the LICENSE file
 for details.
