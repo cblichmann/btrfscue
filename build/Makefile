@@ -94,7 +94,7 @@ updatesourcemeta:
 		$(this_dir)/Makefile \
 		$(this_dir)/README.md; \
 	do \
-		[ -f $$i ] && sed -i \
+		[ -f $$i ] && gsed -i \
 			-e 's/\(btrfscue version\) [0-9]\+\.[0-9]\+/\1 $(version)/' \
 			-e 's/\(Copyright (c)[0-9]\+\)-[0-9]\+/\1-$(c_year)/' \
 			$$i; \
