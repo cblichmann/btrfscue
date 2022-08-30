@@ -2,9 +2,9 @@ name: build
 
 on:
   push:
-    branches: [master, ci]
+    branches: [main, ci]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   build:
@@ -16,10 +16,9 @@ jobs:
         # TODO(cblichmann): Test and add Windows
         os: [ubuntu-20.04, macos-11.0]
         go: [1.13, 1.15.6]
-        #include:
-        ## First Go version with support for Universal2
-        #- os: macos-11.0
-        #  go: 1.16
+        include:
+        - os: macos-12
+          go: 1.17.13
 
     steps:
     - name: Set up Go ${{ matrix.go }}
