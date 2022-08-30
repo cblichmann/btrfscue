@@ -53,7 +53,7 @@ This definitely does not work:
 Requirements
 ------------
 
-  - Go 1.12 or higher
+  - Go 1.18 or higher
   - Git version 1.7 or later
   - Optional: CDBS (to build the Debian packages)
   - Optional: GNU Make

@@ -14,11 +14,8 @@ jobs:
     strategy:
       matrix:
         # TODO(cblichmann): Test and add Windows
-        os: [ubuntu-20.04, macos-11.0]
-        go: [1.13, 1.15.6]
-        include:
-        - os: macos-12
-          go: 1.17.13
+        os: [ubuntu-20.04, macos-12]
+        go: [1.18, 1.19]
 
     steps:
     - name: Set up Go ${{ matrix.go }}
