@@ -2,7 +2,7 @@
 
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2022 Christian Blichmann
+ * Copyright (c)2011-2023 Christian Blichmann
  *
  * Enables CPU profiling if build with -tags 'pprof'
  *

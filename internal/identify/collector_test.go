@@ -1,6 +1,6 @@
 /*
  * btrfscue version 0.6
- * Copyright (c)2011-2022 Christian Blichmann
+ * Copyright (c)2011-2023 Christian Blichmann
  *
  * Collect filesystem IDs from block I/O
  *
