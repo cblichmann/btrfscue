@@ -71,14 +71,14 @@ Recommended Tools
 How to Build
 ------------
 
-General way to build from source via `go get`:
+General way to build and install via `go install`:
 ```
-go get blichmann.eu/code/btrfscue
+go install blichmann.eu/code/btrfscue/cmd/btrfscue@latest
 ```
 
 ### Build using Make
 
-To build from a specific revision/branch/tag, not using `go get`:
+To build from a specific revision/branch/tag, not using `go install`:
 ```bash
 mkdir -p btrfscue && cd btrfscue
 git clone --recurse-submodules https://github.com/cblichmann/btrfscue.git .
