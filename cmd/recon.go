@@ -7,6 +7,8 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"io"
 	"os"
 
@@ -94,22 +96,30 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 		} else if err != nil {
 			cliutil.ReportError(err)
 		}
-		bar.SetCurrent(int64(off))
+		if (off / bs) % 10000 == 0 {
+			bar.SetCurrent(int64(off))
+		}
+
+		// Offset 32:48 is FSID. options.id is a uuid.UUID which is [16]byte.
+		if !bytes.Equal(buf[32:48], options.id[:]) {
+			continue
+		}
+
+		// Offset 96:100 is NrItems (uint32). Little endian.
+		nrItems := binary.LittleEndian.Uint32(buf[96:100])
+		if nrItems == 0 {
+			continue
+		}
+
+		// Offset 100 is Level (uint8).
+		level := buf[100]
+		if level != 0 {
+			continue
+		}
+
 		l := btrfs.Leaf(buf)
 		h := l.Header()
 
-		// Skip this header if it has the wrong FSID or is empty.
-		if h.FSID() != options.id || h.NrItems() == 0 {
-			continue
-		}
-		// Also skip all non-leaves (= nodes)
-		if !h.IsLeaf() {
-			//cliutil.Warnf("non-leaf %d at offset %d, level %d\n", h.ByteNr(),
-			//	off, h.Level())
-			continue
-		}
-		// The free space of a leaf is between offsets
-		// [ btrfs.HeaderSize, l.Items(l.Len() - 1).Offset() ).
 		for i := 0; i < l.Len(); i++ {
 			cliutil.ReportError(ix.InsertItem(l.Key(i), h, l.Item(i),
 				l.Data(i)))
