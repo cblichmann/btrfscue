@@ -271,14 +271,14 @@ func lowerBound(c *bbolt.Cursor, owner uint64, k btrfs.Key, gen uint64,
 	var cur, next keyV2
 	search := newIndexKey(owner, k, 0)[:prefix]
 	cur, _ = c.Seek(search)
-	if cur == nil || !bytes.Equal(cur[:prefix], search) {
+	if len(cur) < keyV2End || !bytes.Equal(cur[:prefix], search) || cur.Generation() > gen {
 		return KL()
 	}
 
 	for {
 		curKeyPrefix := cur[:keyV2Generation]
 		next, _ = c.Next()
-		if next != nil && bytes.Equal(next[:keyV2Generation], curKeyPrefix) {
+		if len(next) >= keyV2End && bytes.Equal(next[:keyV2Generation], curKeyPrefix) {
 			if next.Generation() > gen {
 				return cur.Key()
 			}
