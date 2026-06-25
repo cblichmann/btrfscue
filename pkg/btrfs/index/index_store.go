@@ -111,7 +111,9 @@ func openIndex(path string, m os.FileMode, o *Options) (*Index, error) {
 	ix := &Index{Generation: o.Generation}
 	var err error
 	if ix.db, err = bbolt.Open(path, m, &bbolt.Options{
-		ReadOnly: o.ReadOnly}); err != nil {
+		ReadOnly: o.ReadOnly,
+		NoSync:   !o.ReadOnly,
+	}); err != nil {
 		return nil, err
 	}
 	if err = ix.checkUpdateMetadata(o); err != nil {
