@@ -6,6 +6,7 @@
 package cmd
 
 import (
+	"bufio"
 	"io"
 	"os"
 
@@ -16,7 +17,6 @@ import (
 	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
 	"blichmann.eu/code/btrfscue/pkg/btrfs"
 	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
-	"blichmann.eu/code/btrfscue/pkg/ioutil"
 	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
@@ -61,6 +61,12 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	cliutil.ReportError(err)
 	devSize = devSize - (devSize % bs)
 
+	startOff := uint64(btrfs.SuperInfoOffset) + bs
+	_, err = f.Seek(int64(startOff), 0)
+	cliutil.ReportError(err)
+
+	reader := bufio.NewReaderSize(f, 64*1024*1024) // 64MB buffer
+
 	buf := make([]byte, bs)
 
 	ix, err := index.Open(app.Global.Metadata, 0644, &index.Options{
@@ -81,9 +87,9 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	}
 	defer bar.Finish()
 
-	// Start right after the first superblock
-	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
-		if err = ioutil.ReadBlockAt(f, buf, off); err == io.EOF {
+	for off := startOff; off < devSize; off += bs {
+		_, err = io.ReadFull(reader, buf)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			break
 		} else if err != nil {
 			cliutil.ReportError(err)
