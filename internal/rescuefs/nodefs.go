@@ -33,7 +33,17 @@ func (r *rescueFS) newNode() *basicNode {
 
 func (r *rescueFS) OnMount(c *nodefs.FileSystemConnector) {
 	i := r.root.Inode()
-	i.NewChild("rescue", true, newRescueNode(r, btrfs.FSTreeObjectID,
+	i.NewChild("subvol_FS_TREE", true, newRescueNode(r, btrfs.FSTreeObjectID,
+		btrfs.FirstFreeObjectID))
+	i.NewChild("subvol_@", true, newRescueNode(r, 258,
+		btrfs.FirstFreeObjectID))
+	i.NewChild("subvol_@home", true, newRescueNode(r, 259,
+		btrfs.FirstFreeObjectID))
+	i.NewChild("subvol_@log", true, newRescueNode(r, 260,
+		btrfs.FirstFreeObjectID))
+	i.NewChild("subvol_@pkg", true, newRescueNode(r, 261,
+		btrfs.FirstFreeObjectID))
+	i.NewChild("subvol_@swap", true, newRescueNode(r, 262,
 		btrfs.FirstFreeObjectID))
 	i.NewChild("metadata", false, newMetadataNode(r))
 }
