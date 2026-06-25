@@ -34,17 +34,17 @@ func (r *rescueFS) newNode() *basicNode {
 func (r *rescueFS) OnMount(c *nodefs.FileSystemConnector) {
 	i := r.root.Inode()
 	i.NewChild("subvol_FS_TREE", true, newRescueNode(r, btrfs.FSTreeObjectID,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("subvol_@", true, newRescueNode(r, 258,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("subvol_@home", true, newRescueNode(r, 259,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("subvol_@log", true, newRescueNode(r, 260,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("subvol_@pkg", true, newRescueNode(r, 261,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("subvol_@swap", true, newRescueNode(r, 262,
-		btrfs.FirstFreeObjectID))
+		btrfs.FirstFreeObjectID, true))
 	i.NewChild("metadata", false, newMetadataNode(r))
 }
 
@@ -98,17 +98,19 @@ type rescueNode struct {
 	ix       *index.Index
 	owner    uint64
 	ixInode  uint64
+	isDir    bool
 	attr     *fuse.Attr // Cached attributes
 	dirItems map[string]btrfs.DirItem
 }
 
-func newRescueNode(fs *rescueFS, owner, inode uint64) *rescueNode {
+func newRescueNode(fs *rescueFS, owner, inode uint64, isDir bool) *rescueNode {
 	return &rescueNode{
 		Node:     nodefs.NewDefaultNode(),
 		fs:       fs,
 		ix:       fs.ix,
 		owner:    owner,
 		ixInode:  inode,
+		isDir:    isDir,
 		dirItems: make(map[string]btrfs.DirItem),
 	}
 }
@@ -118,22 +120,44 @@ func (n *rescueNode) GetAttr(fi *fuse.Attr, file nodefs.File,
 	if n.attr == nil {
 		ii := n.ix.FindInodeItem(n.owner, n.ixInode)
 		if ii == nil {
-			fmt.Println("No data for", n.owner, n.ixInode) //DBG!!!
-			return fuse.ENOATTR
-		}
-		n.attr = &fuse.Attr{
-			Ino:       n.ixInode,
-			Size:      ii.Size(),
-			Atime:     uint64(ii.Atime().Unix()),
-			Mtime:     uint64(ii.Mtime().Unix()),
-			Ctime:     uint64(ii.Ctime().Unix()),
-			Atimensec: uint32(ii.Atime().Nanosecond()),
-			Mtimensec: uint32(ii.Mtime().Nanosecond()),
-			Ctimensec: uint32(ii.Ctime().Nanosecond()),
-			Mode:      ii.Mode(),
-			Nlink:     ii.Nlink(),
-			Owner:     fuse.Owner{Uid: ii.UID(), Gid: ii.GID()},
-			Rdev:      uint32(ii.Rdev()),
+			// Synthesize a fake inode attribute for recovery when missing
+			mode := uint32(0555 | fuse.S_IFDIR)
+			size := uint64(0)
+			if !n.isDir {
+				mode = 0444 | fuse.S_IFREG
+				if e := n.ix.FindFileExtentItem(n.owner, n.ixInode); e != nil {
+					if e.IsInline() {
+						size = uint64(len(e.Data()))
+					} else {
+						size = e.NumBytes()
+					}
+				}
+			}
+			now := time.Now()
+			n.attr = &fuse.Attr{
+				Ino:       n.ixInode,
+				Size:      size,
+				Atime:     uint64(now.Unix()),
+				Mtime:     uint64(now.Unix()),
+				Ctime:     uint64(now.Unix()),
+				Mode:      mode,
+				Nlink:     1,
+			}
+		} else {
+			n.attr = &fuse.Attr{
+				Ino:       n.ixInode,
+				Size:      ii.Size(),
+				Atime:     uint64(ii.Atime().Unix()),
+				Mtime:     uint64(ii.Mtime().Unix()),
+				Ctime:     uint64(ii.Ctime().Unix()),
+				Atimensec: uint32(ii.Atime().Nanosecond()),
+				Mtimensec: uint32(ii.Mtime().Nanosecond()),
+				Ctimensec: uint32(ii.Ctime().Nanosecond()),
+				Mode:      ii.Mode(),
+				Nlink:     ii.Nlink(),
+				Owner:     fuse.Owner{Uid: ii.UID(), Gid: ii.GID()},
+				Rdev:      uint32(ii.Rdev()),
+			}
 		}
 	}
 	*fi = *n.attr
@@ -164,7 +188,7 @@ func (n *rescueNode) Lookup(out *fuse.Attr, name string,
 		owner = d.Location().ObjectID
 		inode = btrfs.FirstFreeObjectID
 	}
-	node := newRescueNode(n.fs, owner, inode)
+	node := newRescueNode(n.fs, owner, inode, d.IsDir())
 	ch := n.Inode().NewChild(name, d.IsDir(), node)
 	return ch, node.GetAttr(out, nil, context)
 }
