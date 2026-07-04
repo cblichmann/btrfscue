@@ -33,7 +33,7 @@ Table of Contents
 Development State
 -----------------
 
-As the version number 0.5 implies, this software is pretty much in alpha state.
+As the version number 0.6 implies, this software is pretty much in alpha state.
 In fact, the repository you're looking at now is a complete rewrite of an
 earlier attempt that was written in C++ as early as 2011 (so don't let the
 copyright years fool you :)).
@@ -151,7 +151,7 @@ Copyright/License
 -----------------
 
 btrfscue version 0.6
-Copyright (c)2011-2023 Christian Blichmann <mail@blichmann.eu>
+Copyright btrfscue authors
 
 btrfscue is licensed under a two-clause BSD license, see the LICENSE file
 for details.
