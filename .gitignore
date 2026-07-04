@@ -1,7 +1,9 @@
 # Build artifacts
 bin/
 src/
-# Editor swap files
+# Editor/IDE files
+.antigravitycli
+.vscode
 .*.sw[op]
 # Development temp files
 __tmp/

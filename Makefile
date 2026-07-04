@@ -6,7 +6,7 @@
 # Makefile for POSIX compatible systems
 
 # Source Configuration
-version = 0.6
+version = 0.7
 c_year ?= $(shell date +%Y)
 go_package = blichmann.eu/code/btrfscue
 go_programs = btrfscue

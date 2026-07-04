@@ -33,10 +33,9 @@ Table of Contents
 Development State
 -----------------
 
-As the version number 0.6 implies, this software is pretty much in alpha state.
+As the version number 0.7 implies, this software is pretty much in alpha state.
 In fact, the repository you're looking at now is a complete rewrite of an
-earlier attempt that was written in C++ as early as 2011 (so don't let the
-copyright years fool you :)).
+earlier attempt that was written in C++ as early as 2011.
 
 This works:
   - Heuristic detection of filesystem identifiers
@@ -143,14 +142,19 @@ Data recovery with btrfscue is divided in stages:
      ```
      Explore the metadata from another shell. Type CTRL+C to unmount.
 
-  5. Restore the actual data. This is work-in-progress. You can use the mount
-     command to copy files that are no bigger than the filesystem block size.
+  5. Restore the actual data. The `recover` command will restore everything
+     to a target directory:
+     ```
+     btrfscue recover --metadata metadata.db DISKIMAGE DEST_DIR/
+     ```
+     However, it is much more convenient to FUSE-mount (step #4) and manually
+     copy interesting data from the rescue filesystem.
 
 
 Copyright/License
 -----------------
 
-btrfscue version 0.6
+btrfscue version 0.7
 Copyright btrfscue authors
 
 btrfscue is licensed under a two-clause BSD license, see the LICENSE file
