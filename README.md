@@ -44,7 +44,6 @@ This works:
   - FUSE-mounting a "rescue" view of the metadata
 
 This definitely does not work:
-  - Actually restoring files bigger than the filesystem block size
   - Running on big-endian machines
   - BTRFS RAID levels, multi-device FS. These are planned for later.
 

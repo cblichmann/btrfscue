@@ -1,3 +1,9 @@
+btrfscue (0.7-1) UNRELEASED; urgency=medium
+
+  * New version 0.7 with full-file recovery
+
+ -- Christian Blichmann <mail@blichmann.eu>  Sat, 04 Jul 2026 19:00:10 +0200
+
 btrfscue (0.4-1) UNRELEASED; urgency=medium
 
   * Initial release.

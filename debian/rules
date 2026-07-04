@@ -3,9 +3,21 @@
 # Copyright btrfscue authors
 # SPDX-License-Identifier: BSD-2-Clause
 #
-# CDBS rules file for Debian packaging
+# Rules file for Debian packaging using dh
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/makefile.mk
+HOME_DIR := $(shell getent passwd $$(id -u) | cut -d: -f6)
+export GOMODCACHE = $(HOME_DIR)/go/pkg/mod
+export GOCACHE = $(HOME_DIR)/.cache/go-build
 
-DEB_MAKE_ENVVARS = $(shell eval make env | cut -c7-)
+%:
+	dh $@
+
+# We override dh_auto_install so that it doesn't try to run 'make install',
+# since our Makefile does not have an 'install' target. The files are
+# instead installed via debian/btrfscue.install.
+override_dh_auto_install:
+	# Do nothing
+
+# dwz fails on Go binaries due to compressed debug sections.
+override_dh_dwz:
+	# Do nothing

@@ -2,13 +2,13 @@ Source: btrfscue
 Maintainer: Christian Blichmann <mail@blichmann.eu>
 Section: admin
 Priority: optional
-Build-Depends: cdbs,golang,make
-Standards-Version: 3.9.6
-Homepage: https://github.com/cblichmann/jailtime
+Build-Depends: debhelper-compat (= 13), golang-go
+Standards-Version: 4.7.0
+Homepage: https://github.com/cblichmann/btrfscue
 
 Package: btrfscue
 Architecture: any
-Depends: ${shlibs:Depends},${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Advanced data recovery tool for the BTRFS filesystem.
  btrfscue is designed to restore data
  - from disk images of faulty storage devices.
