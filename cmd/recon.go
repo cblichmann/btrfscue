@@ -6,6 +6,9 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/binary"
 	"io"
 	"os"
 
@@ -16,7 +19,6 @@ import (
 	cliutil "blichmann.eu/code/btrfscue/cmd/btrfscue/app/util"
 	"blichmann.eu/code/btrfscue/pkg/btrfs"
 	"blichmann.eu/code/btrfscue/pkg/btrfs/index"
-	"blichmann.eu/code/btrfscue/pkg/ioutil"
 	"blichmann.eu/code/btrfscue/pkg/uuid"
 )
 
@@ -61,6 +63,12 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	cliutil.ReportError(err)
 	devSize = devSize - (devSize % bs)
 
+	startOff := uint64(btrfs.SuperInfoOffset) + bs
+	_, err = f.Seek(int64(startOff), 0)
+	cliutil.ReportError(err)
+
+	reader := bufio.NewReaderSize(f, 64*1024*1024) // 64MB buffer
+
 	buf := make([]byte, bs)
 
 	ix, err := index.Open(app.Global.Metadata, 0644, &index.Options{
@@ -81,29 +89,37 @@ func doScanFS(filename, metadata string, options scanFSOptions) {
 	}
 	defer bar.Finish()
 
-	// Start right after the first superblock
-	for off := uint64(btrfs.SuperInfoOffset) + bs; off < devSize; off += bs {
-		if err = ioutil.ReadBlockAt(f, buf, off); err == io.EOF {
+	for off := startOff; off < devSize; off += bs {
+		_, err = io.ReadFull(reader, buf)
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			break
 		} else if err != nil {
 			cliutil.ReportError(err)
 		}
-		bar.SetCurrent(int64(off))
+		if (off / bs) % 10000 == 0 {
+			bar.SetCurrent(int64(off))
+		}
+
+		// Offset 32:48 is FSID. options.id is a uuid.UUID which is [16]byte.
+		if !bytes.Equal(buf[32:48], options.id[:]) {
+			continue
+		}
+
+		// Offset 96:100 is NrItems (uint32). Little endian.
+		nrItems := binary.LittleEndian.Uint32(buf[96:100])
+		if nrItems == 0 {
+			continue
+		}
+
+		// Offset 100 is Level (uint8).
+		level := buf[100]
+		if level != 0 {
+			continue
+		}
+
 		l := btrfs.Leaf(buf)
 		h := l.Header()
 
-		// Skip this header if it has the wrong FSID or is empty.
-		if h.FSID() != options.id || h.NrItems() == 0 {
-			continue
-		}
-		// Also skip all non-leaves (= nodes)
-		if !h.IsLeaf() {
-			//cliutil.Warnf("non-leaf %d at offset %d, level %d\n", h.ByteNr(),
-			//	off, h.Level())
-			continue
-		}
-		// The free space of a leaf is between offsets
-		// [ btrfs.HeaderSize, l.Items(l.Len() - 1).Offset() ).
 		for i := 0; i < l.Len(); i++ {
 			cliutil.ReportError(ix.InsertItem(l.Key(i), h, l.Item(i),
 				l.Data(i)))
